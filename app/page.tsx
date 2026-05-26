@@ -1,4 +1,11 @@
+'use client'
+
+import { useActionState } from 'react'
+import { signIn } from '@/app/actions/auth'
+
 export default function Home() {
+  const [state, formAction, isPending] = useActionState(signIn, null)
+
   return (
     <main className="min-h-screen flex items-center justify-center bg-[#0A0C0F] relative overflow-hidden">
       {/* Gradiente de fundo */}
@@ -23,40 +30,56 @@ export default function Home() {
         <h1 className="text-white text-xl font-semibold mb-1">Bem-vindo de volta</h1>
         <p className="text-white/50 text-sm mb-7">Acesse sua clínica com segurança</p>
 
-        {/* Campo e-mail */}
-        <div className="relative mb-4">
-          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30 text-sm">✉</span>
-          <input
-            type="email"
-            placeholder="E-mail ou telefone"
-            className="w-full h-11 bg-[#0F1117] border border-white/10 rounded-lg pl-9 pr-4 text-white text-sm placeholder-white/30 outline-none focus:border-[#4F8EF7] transition-colors"
-          />
-        </div>
+        <form action={formAction}>
+          {/* Erro */}
+          {state?.error && (
+            <div className="mb-4 px-4 py-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
+              {state.error}
+            </div>
+          )}
 
-        {/* Campo senha */}
-        <div className="relative mb-5">
-          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30 text-sm">🔒</span>
-          <input
-            type="password"
-            placeholder="Senha"
-            className="w-full h-11 bg-[#0F1117] border border-white/10 rounded-lg pl-9 pr-10 text-white text-sm placeholder-white/30 outline-none focus:border-[#4F8EF7] transition-colors"
-          />
-          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 text-sm cursor-pointer">👁</span>
-        </div>
+          {/* Campo e-mail */}
+          <div className="relative mb-4">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30 text-sm">✉</span>
+            <input
+              type="email"
+              name="email"
+              placeholder="E-mail ou telefone"
+              required
+              className="w-full h-11 bg-[#0F1117] border border-white/10 rounded-lg pl-9 pr-4 text-white text-sm placeholder-white/30 outline-none focus:border-[#4F8EF7] transition-colors"
+            />
+          </div>
 
-        {/* Lembrar + Esqueci */}
-        <div className="flex items-center justify-between mb-6 text-sm">
-          <label className="flex items-center gap-2 text-white/50 cursor-pointer">
-            <input type="checkbox" defaultChecked className="accent-[#4F8EF7]" />
-            Lembrar acesso
-          </label>
-          <span className="text-[#4F8EF7] cursor-pointer hover:underline">Esqueci a senha</span>
-        </div>
+          {/* Campo senha */}
+          <div className="relative mb-5">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30 text-sm">🔒</span>
+            <input
+              type="password"
+              name="password"
+              placeholder="Senha"
+              required
+              className="w-full h-11 bg-[#0F1117] border border-white/10 rounded-lg pl-9 pr-10 text-white text-sm placeholder-white/30 outline-none focus:border-[#4F8EF7] transition-colors"
+            />
+          </div>
 
-        {/* Botão entrar */}
-        <button className="w-full h-12 bg-gradient-to-r from-[#4F8EF7] to-[#7C5CFC] text-white font-bold rounded-lg mb-4 hover:opacity-90 transition-opacity text-sm tracking-wide">
-          Entrar na clínica
-        </button>
+          {/* Lembrar + Esqueci */}
+          <div className="flex items-center justify-between mb-6 text-sm">
+            <label className="flex items-center gap-2 text-white/50 cursor-pointer">
+              <input type="checkbox" defaultChecked className="accent-[#4F8EF7]" />
+              Lembrar acesso
+            </label>
+            <span className="text-[#4F8EF7] cursor-pointer hover:underline">Esqueci a senha</span>
+          </div>
+
+          {/* Botão entrar */}
+          <button
+            type="submit"
+            disabled={isPending}
+            className="w-full h-12 bg-gradient-to-r from-[#4F8EF7] to-[#7C5CFC] text-white font-bold rounded-lg mb-4 hover:opacity-90 transition-opacity text-sm tracking-wide disabled:opacity-50"
+          >
+            {isPending ? 'Entrando...' : 'Entrar na clínica'}
+          </button>
+        </form>
 
         {/* Divisor */}
         <div className="flex items-center gap-3 mb-4">

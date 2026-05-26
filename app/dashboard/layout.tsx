@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { signOut } from "@/app/actions/auth";
 
 const menuItems = [
   { icon: "⊞", label: "Dashboard", href: "/dashboard" },
@@ -95,9 +96,11 @@ export default function DashboardLayout({
               <div className="text-white text-xs font-medium truncate">Dra. Ana Lima</div>
               <div className="text-white/40 text-xs truncate">admin</div>
             </div>
-            <Link href="/" className="text-white/30 hover:text-white text-xs transition-colors">
-              Sair
-            </Link>
+            <form action={signOut}>
+              <button type="submit" className="text-white/30 hover:text-white text-xs transition-colors">
+                Sair
+              </button>
+            </form>
           </div>
         </div>
       </aside>

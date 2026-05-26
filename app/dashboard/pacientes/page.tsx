@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { createClient } from "@/utils/supabase/client";
 
-type Paciente = {
+type Cliente = {
   id: number;
   nome: string;
   telefone: string;
@@ -13,7 +13,7 @@ type Paciente = {
 };
 
 export default function Pacientes() {
-  const [pacientes, setPacientes] = useState<Paciente[]>([]);
+  const [clientes, setClientes] = useState<Cliente[]>([]);
   const [loading, setLoading] = useState(true);
   const [busca, setBusca] = useState("");
   const [mostrarForm, setMostrarForm] = useState(false);
@@ -21,31 +21,31 @@ export default function Pacientes() {
   const [form, setForm] = useState({ nome: "", telefone: "", email: "", cpf: "" });
   const supabase = createClient();
 
-  async function carregarPacientes() {
+  async function carregarClientes() {
     setLoading(true);
-    const { data, error } = await supabase.from("pacientes").select("*").order("created_at", { ascending: false });
-    if (!error && data) setPacientes(data);
+    const { data, error } = await supabase.from("clientes").select("*").order("created_at", { ascending: false });
+    if (!error && data) setClientes(data);
     setLoading(false);
   }
 
-  useEffect(() => { carregarPacientes(); }, []);
+  useEffect(() => { carregarClientes(); }, []);
 
-  async function salvarPaciente() {
+  async function salvarCliente() {
     if (!form.nome || !form.telefone) return;
     setSalvando(true);
-    const { error } = await supabase.from("pacientes").insert([form]);
+    const { error } = await supabase.from("clientes").insert([form]);
     if (!error) {
       setForm({ nome: "", telefone: "", email: "", cpf: "" });
       setMostrarForm(false);
-      carregarPacientes();
+      carregarClientes();
     }
     setSalvando(false);
   }
 
-  async function excluirPaciente(id: number, nome: string) {
+  async function excluirCliente(id: number, nome: string) {
     if (!confirm(`Excluir ${nome}?`)) return;
-    await supabase.from("pacientes").delete().eq("id", id);
-    carregarPacientes();
+    await supabase.from("clientes").delete().eq("id", id);
+    carregarClientes();
   }
 
   function formatarTelefone(valor: string) {
@@ -60,10 +60,10 @@ export default function Pacientes() {
     return nums.replace(/(\d{3})(\d{3})(\d{3})(\d{0,2})/, "$1.$2.$3-$4");
   }
 
-  const pacientesFiltrados = pacientes.filter((p) =>
-    p.nome?.toLowerCase().includes(busca.toLowerCase()) ||
-    p.telefone?.includes(busca) ||
-    p.cpf?.includes(busca)
+  const clientesFiltrados = clientes.filter((c) =>
+    c.nome?.toLowerCase().includes(busca.toLowerCase()) ||
+    c.telefone?.includes(busca) ||
+    c.cpf?.includes(busca)
   );
 
   const inputClass = "w-full h-10 bg-[#0F1117] border border-white/10 rounded-lg px-3 text-white text-sm placeholder-white/20 outline-none focus:border-[#4F8EF7] transition-colors";
@@ -74,7 +74,7 @@ export default function Pacientes() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-white text-xl font-semibold">Pacientes</h1>
-          <p className="text-white/40 text-sm mt-1">{pacientes.length} pacientes cadastrados</p>
+          <p className="text-white/40 text-sm mt-1">{clientes.length} pacientes cadastrados</p>
         </div>
         <button onClick={() => setMostrarForm(!mostrarForm)} className="flex items-center gap-2 bg-gradient-to-r from-[#4F8EF7] to-[#7C5CFC] text-white text-sm font-semibold px-4 h-9 rounded-lg hover:opacity-90 transition-opacity">
           + Novo paciente
@@ -103,7 +103,7 @@ export default function Pacientes() {
             </div>
           </div>
           <div className="flex gap-3">
-            <button onClick={salvarPaciente} disabled={salvando || !form.nome || !form.telefone} className="bg-gradient-to-r from-[#4F8EF7] to-[#7C5CFC] text-white text-sm font-semibold px-5 h-9 rounded-lg hover:opacity-90 disabled:opacity-40">
+            <button onClick={salvarCliente} disabled={salvando || !form.nome || !form.telefone} className="bg-gradient-to-r from-[#4F8EF7] to-[#7C5CFC] text-white text-sm font-semibold px-5 h-9 rounded-lg hover:opacity-90 disabled:opacity-40">
               {salvando ? "Salvando..." : "Salvar paciente"}
             </button>
             <button onClick={() => setMostrarForm(false)} className="bg-white/5 border border-white/10 text-white/60 text-sm px-5 h-9 rounded-lg hover:text-white transition-colors">
@@ -121,7 +121,7 @@ export default function Pacientes() {
       <div className="bg-[#161A22] border border-white/5 rounded-xl overflow-hidden">
         {loading ? (
           <div className="p-8 text-center text-white/40 text-sm">Carregando pacientes...</div>
-        ) : pacientesFiltrados.length === 0 ? (
+        ) : clientesFiltrados.length === 0 ? (
           <div className="p-8 text-center">
             <div className="text-white/20 text-4xl mb-3">👥</div>
             <div className="text-white/40 text-sm">{busca ? "Nenhum paciente encontrado" : "Nenhum paciente cadastrado ainda"}</div>
@@ -140,22 +140,22 @@ export default function Pacientes() {
               </tr>
             </thead>
             <tbody>
-              {pacientesFiltrados.map((p, i) => (
-                <tr key={p.id} className="border-b border-white/5 hover:bg-white/5 transition-colors group">
+              {clientesFiltrados.map((c, i) => (
+                <tr key={c.id} className="border-b border-white/5 hover:bg-white/5 transition-colors group">
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-3">
                       <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0" style={{ background: `hsl(${(i * 47) % 360}, 70%, 20%)`, color: `hsl(${(i * 47) % 360}, 70%, 70%)` }}>
-                        {p.nome?.charAt(0).toUpperCase()}
+                        {c.nome?.charAt(0).toUpperCase()}
                       </div>
-                      <div className="text-white text-sm font-medium">{p.nome}</div>
+                      <div className="text-white text-sm font-medium">{c.nome}</div>
                     </div>
                   </td>
-                  <td className="px-4 py-3 text-white/50 text-sm hidden md:table-cell">{p.telefone}</td>
-                  <td className="px-4 py-3 text-white/50 text-sm hidden md:table-cell">{p.email || "—"}</td>
-                  <td className="px-4 py-3 text-white/50 text-sm hidden lg:table-cell">{p.cpf || "—"}</td>
-                  <td className="px-4 py-3 text-white/50 text-sm hidden lg:table-cell">{new Date(p.created_at).toLocaleDateString("pt-BR")}</td>
+                  <td className="px-4 py-3 text-white/50 text-sm hidden md:table-cell">{c.telefone}</td>
+                  <td className="px-4 py-3 text-white/50 text-sm hidden md:table-cell">{c.email || "—"}</td>
+                  <td className="px-4 py-3 text-white/50 text-sm hidden lg:table-cell">{c.cpf || "—"}</td>
+                  <td className="px-4 py-3 text-white/50 text-sm hidden lg:table-cell">{new Date(c.created_at).toLocaleDateString("pt-BR")}</td>
                   <td className="px-4 py-3 text-right">
-                    <button onClick={() => excluirPaciente(p.id, p.nome)} className="opacity-0 group-hover:opacity-100 text-white/30 hover:text-red-400 transition-all text-xs px-2 py-1 rounded">
+                    <button onClick={() => excluirCliente(c.id, c.nome)} className="opacity-0 group-hover:opacity-100 text-white/30 hover:text-red-400 transition-all text-xs px-2 py-1 rounded">
                       Excluir
                     </button>
                   </td>
