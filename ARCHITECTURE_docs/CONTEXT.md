@@ -1,6 +1,6 @@
 # CONTEXT — OdontoOS
 
-Última atualização: 2026-05-26
+Última atualização: 2026-05-27
 
 ## Histórico de sprints
 
@@ -10,22 +10,24 @@
 | Sprint 2 | Concluído | Dashboard com layout completo, sidebar, header, tab bar mobile, KPIs e agenda do dia (dados hardcoded) |
 | Sprint 3 | Concluído | Supabase configurado, CRUD de pacientes, agenda semanal com CRUD |
 | Sprint 4 | Concluído | Autenticação real (Supabase Auth), proteção de rotas, Server Actions, ARCHITECTURE_docs completo |
-| Sprint 5 | Concluído | RLS implementado, tabelas renomeadas (`pacientes`→`clientes`, `paciente_nome`→`cliente_nome`), nomenclatura motor/capa aplicada no código |
+| Sprint 5 | Concluído | RLS implementado, tabelas renomeadas (pacientes→clientes, paciente_nome→cliente_nome), nomenclatura motor/capa aplicada no código |
+| Sprint 6 | Concluído | Dashboard conectado a dados reais: KPIs (pacientes hoje, confirmados, faturamento, pendências), agenda do dia e faturamento mensal via Supabase |
 
 ---
 
-## Fase atual: Fase 1 concluída — entrando na Fase 2
+## Fase atual: Fase 2 — Pacientes e agenda (em andamento)
 
-Fase 1 (base operacional) está completa:
+Fase 1 (base operacional) concluída:
 - Autenticação real funcionando
 - Proteção de rotas via proxy.ts
 - Estrutura visual consolidada
 - Base documental de arquitetura criada
 
-Próxima fase: Fase 2 — Pacientes e agenda (PRODUCT_VISION.md)
-- Cadastro completo de pacientes (base existe, precisa de edição e histórico)
-- Dashboard com dados reais (hoje é mock)
-- Histórico básico do cliente
+Fase 2 em andamento:
+- Dashboard com dados reais ✓ (Sprint 6)
+- Cadastro completo de pacientes ✓ (criar, listar, buscar, editar, excluir)
+- Edição de pacientes ✓ (modal centralizado com todos os campos)
+- Histórico do paciente ✗ (pendente — requer tela de detalhe)
 
 ---
 
@@ -44,102 +46,185 @@ OdontoOS é a primeira capa da OS Platform — um sistema de gestão para clíni
 | Linguagem | TypeScript — obrigatório |
 | Estilização | Tailwind CSS v4 (sem biblioteca de componentes) |
 | Backend / DB | Supabase (PostgreSQL + Auth + RLS) |
-| Cliente Supabase | `@supabase/ssr` — `createBrowserClient` no client, `createServerClient` no server/actions |
+| Cliente Supabase | @supabase/ssr — createBrowserClient no client, createServerClient no server/actions |
 | Deploy | Vercel (automático via GitHub) |
+| Repositório | github.com/vsneto-codex/odontoos |
+| Produção | odontoos-flax.vercel.app |
 
 ---
 
 ## Estrutura de arquivos atual
 
 ```
-proxy.ts                       — Proteção de rotas (Next.js 16 — antigo middleware.ts)
+proxy.ts                        — Proteção de rotas (Next.js 16)
 
 app/
-  page.tsx                     — Tela de login ("use client", useActionState + signIn)
-  layout.tsx                   — Root layout, lang="pt-BR"
+  page.tsx                      — Tela de login ("use client", useActionState + signIn)
+  layout.tsx                    — Root layout, lang="pt-BR"
   globals.css
   actions/
-    auth.ts                    — Server Actions: signIn() e signOut()
+    auth.ts                     — Server Actions: signIn() e signOut()
   auth/
-    callback/route.ts          — Route Handler OAuth (troca code por sessão)
+    callback/route.ts           — Route Handler OAuth
   dashboard/
-    layout.tsx                 — Sidebar + header + tab bar mobile ("use client", signOut)
-    page.tsx                   — Dashboard com KPIs e agenda do dia (dados estáticos/mock)
-    pacientes/page.tsx         — CRUD de clientes conectado ao Supabase
-    agenda/page.tsx            — Grade semanal de consultas conectada ao Supabase
+    layout.tsx                  — Sidebar + header + tab bar mobile ("use client", signOut)
+    page.tsx                    — Dashboard com KPIs e agenda do dia (dados reais Supabase)
+    pacientes/page.tsx          — CRUD de clientes: listar, criar, buscar, excluir (falta edição e histórico)
+    agenda/page.tsx             — Grade semanal de consultas com CRUD
 
 utils/
   supabase/
-    client.ts                  — createBrowserClient (uso em Client Components)
-    server.ts                  — createServerClient (uso em Server Components e Server Actions)
+    client.ts                   — createBrowserClient (Client Components)
+    server.ts                   — createServerClient (Server Components e Server Actions)
 
 ARCHITECTURE_docs/
-  CONTEXT.md                   — Este arquivo
-  PLATFORM_VISION.md           — Visão da plataforma multi-capa e filosofia dos planos
-  PRODUCT_VISION.md            — Visão específica do OdontoOS, MVP e faseação
-  DECISIONS.md                 — Decisões arquiteturais registradas
-  SESSION_RULES.md             — Regras de comportamento em sessão
+  CONTEXT.md                    — Este arquivo
+  PLATFORM_VISION.md
+  PRODUCT_VISION.md
+  DECISIONS.md
+  SESSION_RULES.md
 ```
 
 ---
 
-## Módulos planejados (sidebar)
+## Módulos do dashboard
 
 | Módulo | Rota | Estado |
 |--------|------|--------|
-| Dashboard | /dashboard | Implementado (dados mock — precisa dados reais) |
-| Agenda | /dashboard/agenda | Implementado + Supabase |
-| Pacientes | /dashboard/pacientes | Implementado + Supabase (falta edição e histórico) |
-| Prontuário | /dashboard/prontuario | Não iniciado |
-| Financeiro | /dashboard/financeiro | Não iniciado |
-| Orçamentos | /dashboard/orcamentos | Não iniciado |
-| Comunicação | /dashboard/comunicacao | Não iniciado |
-| Tarefas | /dashboard/tarefas | Não iniciado |
-| Relatórios | /dashboard/relatorios | Não iniciado |
+| Dashboard | /dashboard | ✅ Implementado + dados reais |
+| Agenda | /dashboard/agenda | ✅ Implementado + Supabase |
+| Pacientes | /dashboard/pacientes | ⚠️ Parcial — falta histórico de consultas |
+| Prontuário | /dashboard/prontuario | ❌ Não iniciado (sem page.tsx) |
+| Financeiro | /dashboard/financeiro | ❌ Não iniciado (sem page.tsx) |
+| Orçamentos | /dashboard/orcamentos | ❌ Não iniciado (sem page.tsx) |
+| Comunicação | /dashboard/comunicacao | ❌ Não iniciado (sem page.tsx) |
+| Tarefas | /dashboard/tarefas | ❌ Não iniciado (sem page.tsx) |
+| Relatórios | /dashboard/relatorios | ❌ Não iniciado (sem page.tsx) |
 
 ---
 
-## Tabelas Supabase confirmadas
+## Tabelas Supabase — schema completo confirmado
 
 ### `clientes`
 ```
-id           integer (PK)
-nome         text
-telefone     text
-email        text
-cpf          text
-user_id      uuid NOT NULL → auth.users(id)
-created_at   timestamptz
+id                uuid PK
+user_id           uuid NOT NULL → auth.users(id)
+nome              text NOT NULL
+telefone          text
+email             text
+cpf               text
+data_nascimento   date
+endereco          text
+cidade            text
+estado            text
+cep               text
+convenio          text
+numero_convenio   text
+observacoes       text
+ativo             boolean
+created_at        timestamptz
 ```
-RLS ativo — política: `user_id = auth.uid()`
+RLS ativo — política: user_id = auth.uid()
 
 ### `consultas`
 ```
-id              integer (PK)
-cliente_nome    text   ← denormalizado (não é FK para clientes.id)
-procedimento    text
-hora            text   ← formato "HH:MM"
-data            text   ← formato ISO "YYYY-MM-DD"
-duracao         integer
-status          text
-profissional    text
-observacoes     text
-user_id         uuid NOT NULL → auth.users(id)
+id                uuid PK
+user_id           uuid NOT NULL → auth.users(id)
+cliente_id        uuid → clientes(id)
+cliente_nome      text NOT NULL (denormalizado)
+procedimento_id   uuid → procedimentos(id)
+procedimento      text NOT NULL (denormalizado)
+profissional      text NOT NULL
+data              date NOT NULL
+hora              text NOT NULL (formato "HH:MM")
+duracao           integer
+status            text
+observacoes       text
+created_at        timestamptz
 ```
-RLS ativo — política: `user_id = auth.uid()`
+RLS ativo — política: user_id = auth.uid()
+
+### `procedimentos`
+```
+id                uuid PK
+user_id           uuid NOT NULL → auth.users(id)
+nome              text NOT NULL
+categoria         text NOT NULL
+preco             numeric
+duracao_min       integer
+favorito          boolean
+ativo             boolean
+created_at        timestamptz
+```
+RLS ativo — política: user_id = auth.uid()
+Nota: tabela existe e está pronta. Tela não implementada ainda.
+
+### `orcamentos`
+```
+id                uuid PK
+user_id           uuid NOT NULL → auth.users(id)
+cliente_id        uuid NOT NULL → clientes(id)
+cliente_nome      text NOT NULL (denormalizado)
+status            text
+total             numeric
+validade          date
+observacoes       text
+created_at        timestamptz
+```
+RLS ativo — política: user_id = auth.uid()
+Nota: tabela existe e está pronta. Tela não implementada ainda.
+
+### `orcamento_itens`
+```
+id                uuid PK
+orcamento_id      uuid NOT NULL → orcamentos(id)
+procedimento_id   uuid → procedimentos(id)
+procedimento_nome text NOT NULL (denormalizado)
+preco             numeric
+quantidade        integer
+```
+
+### `pagamentos`
+```
+id                uuid PK
+user_id           uuid NOT NULL → auth.users(id)
+cliente_id        uuid NOT NULL → clientes(id)
+cliente_nome      text NOT NULL (denormalizado)
+orcamento_id      uuid → orcamentos(id)
+valor             numeric NOT NULL
+forma             text NOT NULL
+parcelas          integer
+status            text
+data_pagamento    date NOT NULL
+observacoes       text
+created_at        timestamptz
+```
+RLS ativo — política: user_id = auth.uid()
+Nota: tabela existe e está pronta. Tela não implementada ainda.
+
+---
+
+## Débitos técnicos conhecidos
+
+| Débito | Impacto | Prioridade |
+|--------|---------|------------|
+| `pacientes/page.tsx` usa `id: number` mas banco é uuid | Bug potencial na exclusão | Alta |
+| `consultas.cliente_nome` denormalizado (não é FK) | Risco de dessincronização | Média |
+| Profissionais hardcoded na agenda | Não escalável | Baixa |
+| Módulos Prontuário→Relatórios sem page.tsx | 404 ao clicar no menu | Baixa (não atrapalha uso) |
 
 ---
 
 ## Design system
 
-- **Background base:** `#0A0C0F`
-- **Superfície de cards:** `#161A22`
-- **Sidebar/Header:** `#0F1117`
-- **Acento primário:** `#4F8EF7` (azul) → `#7C5CFC` (roxo) — gradiente
-- **Verde sucesso:** `#22C55E`
-- **Âmbar aviso:** `#F59E0B`
-- **Vermelho erro:** `#EF4444`
-- **Rosa urgência:** `#EC4899`
+- Background base: #0A0C0F
+- Superfície de cards: #161A22
+- Sidebar/Header: #0F1117
+- Acento primário: #4F8EF7 (azul) → #7C5CFC (roxo) — gradiente
+- Verde sucesso: #22C55E
+- Âmbar aviso: #F59E0B
+- Vermelho erro: #EF4444
+- Rosa urgência: #EC4899
 
 ---
 
@@ -149,13 +234,3 @@ RLS ativo — política: `user_id = auth.uid()`
 NEXT_PUBLIC_SUPABASE_URL
 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
 ```
-
----
-
-## Débitos técnicos conhecidos
-
-| Débito | Impacto | Prioridade |
-|--------|---------|------------|
-| Dashboard com dados mock | Não reflete operação real | Alta — próximo sprint |
-| `consultas.cliente_nome` denormalizado (não é FK) | Risco de dessincronização | Média |
-| Profissionais hardcoded no select da agenda | Não escalável | Baixa |

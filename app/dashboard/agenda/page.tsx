@@ -202,7 +202,7 @@ export default function Agenda() {
 
   const mesAno = semanaAtual.toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
 
-  const inputClass = "w-full h-10 bg-[#0F1117] border border-white/10 rounded-lg px-3 text-white text-sm placeholder-white/20 outline-none focus:border-[#4F8EF7] transition-colors";
+  const inputClass = "w-full h-10 bg-[#181C24] border border-white/10 rounded-lg px-3 text-white text-sm placeholder-white/20 outline-none focus:border-[#4F8EF7] transition-colors";
   const labelClass = "text-white/40 text-xs font-semibold uppercase tracking-wide block mb-1";
 
   return (
@@ -225,7 +225,7 @@ export default function Agenda() {
       </div>
 
       {mostrarForm && (
-        <div className="bg-[#161A22] border border-white/10 rounded-xl p-5 mb-6">
+        <div className="bg-[#1E2330] border border-white/10 rounded-xl p-5 mb-6">
           <div className="text-white font-semibold text-sm mb-4">Nova consulta</div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
 
@@ -347,7 +347,7 @@ export default function Agenda() {
         </div>
       )}
 
-      <div className="bg-[#161A22] border border-white/5 rounded-xl overflow-hidden">
+      <div className="bg-[#1E2330] border border-white/5 rounded-xl overflow-hidden">
         <div className="grid border-b border-white/5" style={{ gridTemplateColumns: "70px repeat(6, 1fr)" }}>
           <div className="p-3 border-r border-white/5" />
           {diasSemana.map((dia, i) => {
@@ -398,7 +398,7 @@ export default function Agenda() {
 
       {mostrarModal && consultaSelecionada && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4" onClick={() => setMostrarModal(false)}>
-          <div className="bg-[#161A22] border border-white/10 rounded-2xl p-6 w-full max-w-sm" onClick={e => e.stopPropagation()}>
+          <div className="bg-[#1E2330] border border-white/10 rounded-2xl p-6 w-full max-w-sm" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
               <div className="text-white font-semibold">Detalhes da consulta</div>
               <button onClick={() => setMostrarModal(false)} className="text-white/30 hover:text-white text-lg">✕</button>

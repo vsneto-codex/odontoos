@@ -38,6 +38,16 @@ Formato de cada entrada:
 
 ---
 
+## [2026-05] Dashboard: 4 queries em paralelo via Promise.all
+
+**Decisão:** O dashboard busca todos os dados via `Promise.all` com 4 queries simultâneas ao Supabase no momento do render (Server Component `async`).
+
+**Motivo:** Sem cache intermediário, sem estado client-side — o dashboard reflete o banco em tempo real a cada carregamento. Alternativas descartadas: SWR/React Query (desnecessário num Server Component), query única com joins complexos (mais difícil de manter).
+
+**Impacto:** Cada acesso ao dashboard faz 4 queries ao Supabase. Aceitável no volume atual. Se o dashboard ficar lento, o próximo passo é `unstable_cache` do Next.js com revalidação por tag.
+
+---
+
 ## [2026-05] `consultas.paciente_nome` como texto denormalizado
 
 **Decisão:** A coluna `paciente_nome` na tabela `consultas` armazena o nome como string, não como FK para `pacientes.id`.

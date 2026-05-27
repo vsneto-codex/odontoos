@@ -7,13 +7,13 @@ export default function Home() {
   const [state, formAction, isPending] = useActionState(signIn, null)
 
   return (
-    <main className="min-h-screen flex items-center justify-center bg-[#0A0C0F] relative overflow-hidden">
+    <main className="min-h-screen flex items-center justify-center bg-[#13161C] relative overflow-hidden">
       {/* Gradiente de fundo */}
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_30%_40%,rgba(79,142,247,0.08)_0%,transparent_60%)]" />
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_70%_60%,rgba(124,92,252,0.08)_0%,transparent_60%)]" />
 
       {/* Card de login */}
-      <div className="relative z-10 w-full max-w-md mx-4 bg-[#161A22] border border-white/10 rounded-2xl p-10">
+      <div className="relative z-10 w-full max-w-md mx-4 bg-[#1E2330] border border-white/10 rounded-2xl p-10">
 
         {/* Logo */}
         <div className="flex items-center gap-3 mb-8">
@@ -46,7 +46,7 @@ export default function Home() {
               name="email"
               placeholder="E-mail ou telefone"
               required
-              className="w-full h-11 bg-[#0F1117] border border-white/10 rounded-lg pl-9 pr-4 text-white text-sm placeholder-white/30 outline-none focus:border-[#4F8EF7] transition-colors"
+              className="w-full h-11 bg-[#181C24] border border-white/10 rounded-lg pl-9 pr-4 text-white text-sm placeholder-white/30 outline-none focus:border-[#4F8EF7] transition-colors"
             />
           </div>
 
@@ -58,7 +58,7 @@ export default function Home() {
               name="password"
               placeholder="Senha"
               required
-              className="w-full h-11 bg-[#0F1117] border border-white/10 rounded-lg pl-9 pr-10 text-white text-sm placeholder-white/30 outline-none focus:border-[#4F8EF7] transition-colors"
+              className="w-full h-11 bg-[#181C24] border border-white/10 rounded-lg pl-9 pr-10 text-white text-sm placeholder-white/30 outline-none focus:border-[#4F8EF7] transition-colors"
             />
           </div>
 
