@@ -228,60 +228,25 @@ export default function Agenda() {
         <div className="bg-[#1E2330] border border-white/10 rounded-xl p-5 mb-6">
           <div className="text-white font-semibold text-sm mb-4">Nova consulta</div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-
-            {/* Autocomplete paciente */}
             <div ref={buscaRef} className="relative">
               <label className={labelClass}>Paciente *</label>
-              <input
-                type="text"
-                value={buscaCliente}
-                onChange={e => {
-                  setBuscaCliente(e.target.value);
-                  setForm({...form, cliente_nome: e.target.value});
-                  setMostrarSugestoes(true);
-                }}
-                onFocus={() => setMostrarSugestoes(true)}
-                placeholder="Digite o nome..."
-                className={inputClass}
-              />
+              <input type="text" value={buscaCliente} onChange={e => { setBuscaCliente(e.target.value); setForm({...form, cliente_nome: e.target.value}); setMostrarSugestoes(true); }} onFocus={() => setMostrarSugestoes(true)} placeholder="Digite o nome..." className={inputClass} />
               {mostrarSugestoes && sugestoesClientes.length > 0 && (
                 <div className="absolute top-full left-0 right-0 z-50 mt-1 bg-[#1C2130] border border-white/10 rounded-lg overflow-hidden shadow-xl">
                   {sugestoesClientes.map(c => (
-                    <div
-                      key={c.id}
-                      onClick={() => {
-                        setBuscaCliente(c.nome);
-                        setForm({...form, cliente_nome: c.nome});
-                        setMostrarSugestoes(false);
-                      }}
-                      className="px-3 py-2.5 text-sm text-white hover:bg-white/10 cursor-pointer border-b border-white/5 last:border-0"
-                    >
-                      {c.nome}
-                    </div>
+                    <div key={c.id} onClick={() => { setBuscaCliente(c.nome); setForm({...form, cliente_nome: c.nome}); setMostrarSugestoes(false); }} className="px-3 py-2.5 text-sm text-white hover:bg-white/10 cursor-pointer border-b border-white/5 last:border-0">{c.nome}</div>
                   ))}
                 </div>
               )}
             </div>
-
-            {/* Procedimento */}
             <div>
               <label className={labelClass}>Procedimento</label>
               <select value={form.procedimento} onChange={e => setForm({...form, procedimento: e.target.value})} className={inputClass}>
                 <option value="">Selecione...</option>
                 {procedimentos.map(p => <option key={p}>{p}</option>)}
               </select>
-              {form.procedimento === "Outro" && (
-                <input
-                  type="text"
-                  value={procedimentoCustom}
-                  onChange={e => setProcedimentoCustom(e.target.value)}
-                  placeholder="Digite o procedimento..."
-                  className={`${inputClass} mt-2`}
-                />
-              )}
+              {form.procedimento === "Outro" && <input type="text" value={procedimentoCustom} onChange={e => setProcedimentoCustom(e.target.value)} placeholder="Digite o procedimento..." className={`${inputClass} mt-2`} />}
             </div>
-
-            {/* Profissional */}
             <div>
               <label className={labelClass}>Profissional</label>
               <select value={form.profissional} onChange={e => setForm({...form, profissional: e.target.value})} className={inputClass}>
@@ -290,59 +255,34 @@ export default function Agenda() {
                 <option>Dr. Carlos Santos</option>
               </select>
             </div>
-
-            {/* Data */}
             <div>
               <label className={labelClass}>Data * (DD/MM/AAAA)</label>
-              <input
-                type="text"
-                value={dataInput}
-                onChange={e => setDataInput(formatarDataInput(e.target.value))}
-                placeholder="24/05/2026"
-                maxLength={10}
-                className={inputClass}
-              />
+              <input type="text" value={dataInput} onChange={e => setDataInput(formatarDataInput(e.target.value))} placeholder="24/05/2026" maxLength={10} className={inputClass} />
             </div>
-
-            {/* Hora */}
             <div>
               <label className={labelClass}>Horário *</label>
               <select value={form.hora} onChange={e => setForm({...form, hora: e.target.value})} className={inputClass}>
                 {HORAS.map(h => <option key={h}>{h}</option>)}
               </select>
             </div>
-
-            {/* Status */}
             <div>
               <label className={labelClass}>Status</label>
               <select value={form.status} onChange={e => setForm({...form, status: e.target.value})} className={inputClass}>
                 {statusLista.map(s => <option key={s}>{s}</option>)}
                 <option value="Outro">Outro...</option>
               </select>
-              {form.status === "Outro" && (
-                <input
-                  type="text"
-                  value={statusCustom}
-                  onChange={e => setStatusCustom(e.target.value)}
-                  placeholder="Digite o status..."
-                  className={`${inputClass} mt-2`}
-                />
-              )}
+              {form.status === "Outro" && <input type="text" value={statusCustom} onChange={e => setStatusCustom(e.target.value)} placeholder="Digite o status..." className={`${inputClass} mt-2`} />}
             </div>
           </div>
-
           <div className="mb-4">
             <label className={labelClass}>Observações</label>
             <input type="text" value={form.observacoes} onChange={e => setForm({...form, observacoes: e.target.value})} placeholder="Observações opcionais..." className={inputClass} />
           </div>
-
           <div className="flex gap-3">
             <button onClick={salvarConsulta} disabled={salvando || !form.cliente_nome || !dataInput} className="bg-gradient-to-r from-[#4F8EF7] to-[#7C5CFC] text-white text-sm font-semibold px-5 h-9 rounded-lg hover:opacity-90 disabled:opacity-40">
               {salvando ? "Salvando..." : "Salvar consulta"}
             </button>
-            <button onClick={() => { setMostrarForm(false); setBuscaCliente(""); setDataInput(""); }} className="bg-white/5 border border-white/10 text-white/60 text-sm px-5 h-9 rounded-lg hover:text-white">
-              Cancelar
-            </button>
+            <button onClick={() => { setMostrarForm(false); setBuscaCliente(""); setDataInput(""); }} className="bg-white/5 border border-white/10 text-white/60 text-sm px-5 h-9 rounded-lg hover:text-white">Cancelar</button>
           </div>
         </div>
       )}
@@ -360,7 +300,6 @@ export default function Agenda() {
             );
           })}
         </div>
-
         <div className="overflow-y-auto max-h-[520px]">
           {loading ? (
             <div className="p-8 text-center text-white/40 text-sm">Carregando agenda...</div>
@@ -375,16 +314,10 @@ export default function Agenda() {
                   return (
                     <div key={diaIdx} className={`border-r border-white/5 last:border-r-0 p-1 ${hoje ? "bg-[#4F8EF7]/3" : ""}`}>
                       {consulta && cor && (
-                        <div
-                          onClick={() => { setConsultaSelecionada(consulta); setMostrarModal(true); }}
-                          className="rounded-lg p-2 cursor-pointer hover:brightness-110 transition-all h-full"
-                          style={{ background: `${cor}18`, borderLeft: `3px solid ${cor}` }}
-                        >
+                        <div onClick={() => { setConsultaSelecionada(consulta); setMostrarModal(true); }} className="rounded-lg p-2 cursor-pointer hover:brightness-110 transition-all h-full" style={{ background: `${cor}18`, borderLeft: `3px solid ${cor}` }}>
                           <div className="text-white text-xs font-semibold truncate">{consulta.cliente_nome}</div>
                           <div className="text-white/50 text-xs truncate">{consulta.procedimento}</div>
-                          <span className="text-xs font-semibold px-1.5 py-0.5 rounded-full mt-1 inline-block" style={{ background: `${cor}30`, color: cor }}>
-                            {consulta.status}
-                          </span>
+                          <span className="text-xs font-semibold px-1.5 py-0.5 rounded-full mt-1 inline-block" style={{ background: `${cor}30`, color: cor }}>{consulta.status}</span>
                         </div>
                       )}
                     </div>
@@ -411,28 +344,19 @@ export default function Agenda() {
               <div className="flex justify-between text-sm"><span className="text-white/40">Profissional</span><span className="text-white">{consultaSelecionada.profissional}</span></div>
               <div className="flex justify-between text-sm items-center">
                 <span className="text-white/40">Status</span>
-                <span className="font-semibold px-2 py-0.5 rounded-full text-xs" style={{ background: `${STATUS_CORES[consultaSelecionada.status] ?? "#4F8EF7"}30`, color: STATUS_CORES[consultaSelecionada.status] ?? "#4F8EF7" }}>
-                  {consultaSelecionada.status}
-                </span>
+                <span className="font-semibold px-2 py-0.5 rounded-full text-xs" style={{ background: `${STATUS_CORES[consultaSelecionada.status] ?? "#4F8EF7"}30`, color: STATUS_CORES[consultaSelecionada.status] ?? "#4F8EF7" }}>{consultaSelecionada.status}</span>
               </div>
-              {consultaSelecionada.observacoes && (
-                <div className="flex justify-between text-sm"><span className="text-white/40">Obs.</span><span className="text-white text-right max-w-[60%]">{consultaSelecionada.observacoes}</span></div>
-              )}
+              {consultaSelecionada.observacoes && <div className="flex justify-between text-sm"><span className="text-white/40">Obs.</span><span className="text-white text-right max-w-[60%]">{consultaSelecionada.observacoes}</span></div>}
             </div>
             <div className="mb-4">
               <div className="text-white/40 text-xs font-semibold uppercase tracking-wide mb-2">Alterar status</div>
               <div className="grid grid-cols-2 gap-2">
                 {statusLista.map(status => (
-                  <button key={status} onClick={() => alterarStatus(consultaSelecionada.id, status)}
-                    className={`text-xs py-2 px-3 rounded-lg font-medium transition-all border ${consultaSelecionada.status === status ? "border-white/20 bg-white/10 text-white" : "border-white/5 bg-white/5 text-white/50 hover:text-white"}`}>
-                    {status}
-                  </button>
+                  <button key={status} onClick={() => alterarStatus(consultaSelecionada.id, status)} className={`text-xs py-2 px-3 rounded-lg font-medium transition-all border ${consultaSelecionada.status === status ? "border-white/20 bg-white/10 text-white" : "border-white/5 bg-white/5 text-white/50 hover:text-white"}`}>{status}</button>
                 ))}
               </div>
             </div>
-            <button onClick={() => excluirConsulta(consultaSelecionada.id)} className="w-full py-2 text-red-400 text-sm border border-red-400/20 rounded-lg hover:bg-red-400/10 transition-colors">
-              Excluir consulta
-            </button>
+            <button onClick={() => excluirConsulta(consultaSelecionada.id)} className="w-full py-2 text-red-400 text-sm border border-red-400/20 rounded-lg hover:bg-red-400/10 transition-colors">Excluir consulta</button>
           </div>
         </div>
       )}
