@@ -9,6 +9,7 @@ const menuItems = [
   { icon: "⊞", label: "Dashboard", href: "/dashboard" },
   { icon: "📅", label: "Agenda", href: "/dashboard/agenda" },
   { icon: "👥", label: "Pacientes", href: "/dashboard/pacientes" },
+  { icon: "🦷", label: "Procedimentos", href: "/dashboard/procedimentos" },
   { icon: "📋", label: "Prontuário", href: "/dashboard/prontuario" },
   { icon: "💰", label: "Financeiro", href: "/dashboard/financeiro" },
   { icon: "📄", label: "Orçamentos", href: "/dashboard/orcamentos" },
