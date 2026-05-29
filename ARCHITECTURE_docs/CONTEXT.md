@@ -1,6 +1,6 @@
 # CONTEXT — OdontoOS
 
-Última atualização: 2026-05-27
+Última atualização: 2026-05-29
 
 ## Histórico de sprints
 
@@ -12,6 +12,8 @@
 | Sprint 4 | Concluído | Autenticação real (Supabase Auth), proteção de rotas, Server Actions, ARCHITECTURE_docs completo |
 | Sprint 5 | Concluído | RLS implementado, tabelas renomeadas (pacientes→clientes, paciente_nome→cliente_nome), nomenclatura motor/capa aplicada no código |
 | Sprint 6 | Concluído | Dashboard conectado a dados reais: KPIs (pacientes hoje, confirmados, faturamento, pendências), agenda do dia e faturamento mensal via Supabase |
+| Sprint 7 | Concluído | Tela de Financeiro: KPIs, alertas dinâmicos, filtros, tabela de pagamentos, modal de novo pagamento com autocomplete, parcelas e preview automático |
+| Sprint 8 | Concluído | Tela de Orçamentos: KPIs, busca + filtro por status, tabela com validade tag, modal 2-colunas com favoritos + edição de preço/qtd por item, modal de visualização com alteração de status |
 
 ---
 
@@ -95,8 +97,8 @@ ARCHITECTURE_docs/
 | Agenda | /dashboard/agenda | ✅ Implementado + Supabase |
 | Pacientes | /dashboard/pacientes | ⚠️ Parcial — falta histórico de consultas |
 | Prontuário | /dashboard/prontuario | ❌ Não iniciado (sem page.tsx) |
-| Financeiro | /dashboard/financeiro | ❌ Não iniciado (sem page.tsx) |
-| Orçamentos | /dashboard/orcamentos | ❌ Não iniciado (sem page.tsx) |
+| Financeiro | /dashboard/financeiro | ✅ Implementado + Supabase |
+| Orçamentos | /dashboard/orcamentos | ✅ Implementado + Supabase |
 | Comunicação | /dashboard/comunicacao | ❌ Não iniciado (sem page.tsx) |
 | Tarefas | /dashboard/tarefas | ❌ Não iniciado (sem page.tsx) |
 | Relatórios | /dashboard/relatorios | ❌ Não iniciado (sem page.tsx) |

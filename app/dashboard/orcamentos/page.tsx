@@ -1,419 +1,605 @@
-"use client";
+"use client"
 
-import { useState, useEffect, useCallback, useRef } from "react";
-import { createClient } from "@/utils/supabase/client";
+import { useState, useEffect, useRef } from "react"
+import type { CSSProperties } from "react"
+import { createClient } from "@/utils/supabase/client"
 
-type Cliente = { id: string; nome: string; telefone: string | null; };
-type Procedimento = { id: string; nome: string; categoria: string; preco: number | null; favorito: boolean | null; };
-type ItemOrcamento = { procedimento_id: string; procedimento_nome: string; preco: number; quantidade: number; };
+// ─── Types ───────────────────────────────────────────────────────────────────
+
+type Cliente = {
+  id: string
+  nome: string
+  telefone: string | null
+}
+
+type Procedimento = {
+  id: string
+  nome: string
+  categoria: string
+  preco: number | null
+  favorito: boolean | null
+}
+
+type OrcamentoItem = {
+  id: string
+  orcamento_id: string
+  procedimento_id: string | null
+  procedimento_nome: string
+  preco: number
+  quantidade: number
+}
+
 type Orcamento = {
-  id: string;
-  cliente_id: string;
-  cliente_nome: string;
-  status: string;
-  total: number;
-  validade: string | null;
-  observacoes: string | null;
-  created_at: string;
-  itens?: ItemOrcamento[];
-};
+  id: string
+  user_id: string
+  cliente_id: string
+  cliente_nome: string
+  status: string
+  total: number
+  validade: string | null
+  observacoes: string | null
+  created_at: string
+  orcamento_itens: OrcamentoItem[]
+}
+
+type ItemForm = {
+  procedimento_id: string
+  procedimento_nome: string
+  preco: number
+  quantidade: number
+}
+
+// ─── Constants ───────────────────────────────────────────────────────────────
+
+const STATUS_ORCAMENTO = ["Pendente", "Aprovado", "Recusado", "Cancelado"] as const
 
 const STATUS_CORES: Record<string, string> = {
-  "Pendente": "#F59E0B",
-  "Aprovado": "#22C55E",
-  "Recusado": "#EF4444",
-  "Expirado": "#6B7280",
-};
+  Pendente: "#F59E0B",
+  Aprovado: "#22C55E",
+  Recusado: "#EF4444",
+  Cancelado: "#6B7280",
+}
 
 const VALIDADE_OPCOES = [
-  { label: "5 dias",  valor: "5" },
-  { label: "10 dias", valor: "10" },
-  { label: "15 dias", valor: "15" },
-  { label: "1 mês",   valor: "30" },
-  { label: "Outros",  valor: "outros" },
-];
+  { label: "5 dias", dias: 5 },
+  { label: "10 dias", dias: 10 },
+  { label: "15 dias", dias: 15 },
+  { label: "1 mês", dias: 30 },
+  { label: "2 meses", dias: 60 },
+  { label: "Personalizado", dias: -1 },
+]
 
-function diasRestantes(validade: string | null): number | null {
-  if (!validade) return null;
-  const hoje = new Date();
-  hoje.setHours(0, 0, 0, 0);
-  const val = new Date(validade + "T00:00:00");
-  val.setHours(0, 0, 0, 0);
-  return Math.round((val.getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24));
+// ─── Shared Styles ────────────────────────────────────────────────────────────
+
+const inputCss: CSSProperties = {
+  width: "100%",
+  background: "#0F1117",
+  border: "1px solid #1E2533",
+  borderRadius: 8,
+  padding: "10px 12px",
+  color: "#F8FAFC",
+  fontSize: 14,
+  boxSizing: "border-box",
+}
+
+const btnSec: CSSProperties = {
+  background: "#1E2533",
+  border: "none",
+  borderRadius: 8,
+  color: "#94A3B8",
+  padding: "10px 16px",
+  cursor: "pointer",
+  fontSize: 14,
+  fontWeight: 500,
+}
+
+const btnPrimary: CSSProperties = {
+  background: "linear-gradient(135deg, #4F8EF7, #7C5CFC)",
+  border: "none",
+  borderRadius: 8,
+  color: "#fff",
+  padding: "10px 20px",
+  cursor: "pointer",
+  fontSize: 14,
+  fontWeight: 600,
+}
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+function formatarMoeda(valor: number): string {
+  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(valor)
+}
+
+function formatarData(dateStr: string): string {
+  return new Date(dateStr + "T12:00:00").toLocaleDateString("pt-BR")
+}
+
+function diasAteValidade(dateStr: string): number {
+  const alvo = new Date(dateStr + "T00:00:00")
+  const hoje = new Date()
+  hoje.setHours(0, 0, 0, 0)
+  return Math.round((alvo.getTime() - hoje.getTime()) / 86_400_000)
 }
 
 function ValidadeTag({ validade }: { validade: string | null }) {
-  if (!validade) return <span className="text-white/30 text-xs">—</span>;
-  const dias = diasRestantes(validade);
-  if (dias === null) return <span className="text-white/30 text-xs">—</span>;
-  if (dias < 0) return (
-    <span className="text-xs font-semibold px-2 py-1 rounded-full bg-[#EF4444]/15 text-[#EF4444]">Vencido</span>
-  );
-  if (dias === 0) return (
-    <span className="text-xs font-semibold px-2 py-1 rounded-full bg-[#F59E0B]/15 text-[#F59E0B]">Vence hoje</span>
-  );
-  const cor = dias <= 5 ? "#EF4444" : dias <= 10 ? "#F59E0B" : "#22C55E";
+  if (!validade) return <span style={{ color: "#475569", fontSize: 13 }}>—</span>
+  const dias = diasAteValidade(validade)
+  const cor = dias < 0 ? "#EF4444" : dias <= 5 ? "#F59E0B" : "#22C55E"
+  const label = dias < 0 ? "Vencido" : dias === 0 ? "Vence hoje" : `${dias}d`
   return (
-    <span className="text-xs font-semibold px-2 py-1 rounded-full" style={{ background: `${cor}15`, color: cor }}>
-      {dias} dias
+    <span style={{ background: `${cor}20`, color: cor, padding: "3px 8px", borderRadius: 20, fontSize: 12, fontWeight: 600 }}>
+      {label}
     </span>
-  );
+  )
 }
 
-function formatarMoeda(valor: number) {
-  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(valor);
-}
+// ─── Modal Novo Orçamento ─────────────────────────────────────────────────────
 
-function formatarData(data: string) {
-  return new Date(data + "T12:00:00").toLocaleDateString("pt-BR");
-}
+type ModalNovoProps = { onClose: () => void; onSaved: () => void }
 
-function ModalNovoOrcamento({ onFechar, onSalvo }: { onFechar: () => void; onSalvo: () => void; }) {
-  const [clientes, setClientes] = useState<Cliente[]>([]);
-  const [procedimentos, setProcedimentos] = useState<Procedimento[]>([]);
-  const [buscaCliente, setBuscaCliente] = useState("");
-  const [clienteSelecionado, setClienteSelecionado] = useState<Cliente | null>(null);
-  const [mostrarSugestoes, setMostrarSugestoes] = useState(false);
-  const [buscaProc, setBuscaProc] = useState("");
-  const [itens, setItens] = useState<ItemOrcamento[]>([]);
-  const [validadeOpcao, setValidadeOpcao] = useState("30");
-  const [validadeCustom, setValidadeCustom] = useState("");
-  const [observacoes, setObservacoes] = useState("");
-  const [salvando, setSalvando] = useState(false);
-  const buscaRef = useRef<HTMLDivElement>(null);
-  const supabase = createClient();
+function ModalNovoOrcamento({ onClose, onSaved }: ModalNovoProps) {
+  const buscaClienteRef = useRef<HTMLDivElement>(null)
 
+  // Autocomplete paciente
+  const [buscaCliente, setBuscaCliente] = useState("")
+  const [clientesSug, setClientesSug] = useState<Cliente[]>([])
+  const [clienteSel, setClienteSel] = useState<Cliente | null>(null)
+  const [showClientes, setShowClientes] = useState(false)
+
+  // Procedimentos
+  const [todosProceds, setTodosProceds] = useState<Procedimento[]>([])
+  const [buscaProc, setBuscaProc] = useState("")
+
+  // Itens
+  const [itens, setItens] = useState<ItemForm[]>([])
+
+  // Validade
+  const [validadeIdx, setValidadeIdx] = useState(3) // default: 1 mês
+  const [validadeCustom, setValidadeCustom] = useState("")
+
+  const [observacoes, setObservacoes] = useState("")
+  const [salvando, setSalvando] = useState(false)
+
+  const total = itens.reduce((acc, it) => acc + it.preco * it.quantidade, 0)
+
+  // Carrega todos os procedimentos na abertura do modal
   useEffect(() => {
-    async function carregar() {
-      const [{ data: c }, { data: p }] = await Promise.all([
-        supabase.from("clientes").select("id, nome, telefone").order("nome"),
-        supabase.from("procedimentos").select("*").eq("ativo", true).order("favorito", { ascending: false }).order("nome"),
-      ]);
-      if (c) setClientes(c);
-      if (p) setProcedimentos(p);
+    const supabase = createClient()
+    supabase
+      .from("procedimentos")
+      .select("id, nome, categoria, preco, favorito")
+      .eq("ativo", true)
+      .order("favorito", { ascending: false })
+      .order("nome")
+      .then(({ data }) => setTodosProceds(data ?? []))
+  }, [])
+
+  // Fecha dropdown ao clicar fora
+  useEffect(() => {
+    function handler(e: MouseEvent) {
+      if (buscaClienteRef.current && !buscaClienteRef.current.contains(e.target as Node)) {
+        setShowClientes(false)
+      }
     }
-    carregar();
-  }, []);
+    document.addEventListener("mousedown", handler)
+    return () => document.removeEventListener("mousedown", handler)
+  }, [])
 
+  // Busca clientes no Supabase com debounce
   useEffect(() => {
-    function handleKey(e: KeyboardEvent) { if (e.key === "Escape") onFechar(); }
-    window.addEventListener("keydown", handleKey);
-    return () => window.removeEventListener("keydown", handleKey);
-  }, [onFechar]);
-
-  useEffect(() => {
-    function handleClick(e: MouseEvent) {
-      if (buscaRef.current && !buscaRef.current.contains(e.target as Node)) setMostrarSugestoes(false);
+    if (buscaCliente.length < 2 || clienteSel) {
+      setClientesSug([])
+      setShowClientes(false)
+      return
     }
-    document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
-  }, []);
+    const t = setTimeout(async () => {
+      const supabase = createClient()
+      const { data } = await supabase
+        .from("clientes")
+        .select("id, nome, telefone")
+        .ilike("nome", `%${buscaCliente}%`)
+        .limit(6)
+      setClientesSug(data ?? [])
+      setShowClientes(true)
+    }, 250)
+    return () => clearTimeout(t)
+  }, [buscaCliente, clienteSel])
 
-  const sugestoesClientes = buscaCliente.length >= 1
-    ? clientes.filter(c => c.nome.toLowerCase().includes(buscaCliente.toLowerCase())).slice(0, 6)
-    : [];
+  function selecionarCliente(c: Cliente) {
+    setClienteSel(c)
+    setBuscaCliente(c.nome)
+    setShowClientes(false)
+    setClientesSug([])
+  }
 
-  const procsFiltrados = procedimentos.filter(p =>
+  const listaProcs = todosProceds.filter(p =>
     p.nome.toLowerCase().includes(buscaProc.toLowerCase()) ||
     p.categoria.toLowerCase().includes(buscaProc.toLowerCase())
-  );
-  const favoritos = procsFiltrados.filter(p => p.favorito);
-  const outros = procsFiltrados.filter(p => !p.favorito);
-  const listaProcs = [...favoritos, ...outros];
+  )
 
   function adicionarItem(p: Procedimento) {
-    const existe = itens.find(i => i.procedimento_id === p.id);
-    if (existe) {
-      setItens(prev => prev.map(i => i.procedimento_id === p.id ? { ...i, quantidade: i.quantidade + 1 } : i));
-    } else {
-      setItens(prev => [...prev, { procedimento_id: p.id, procedimento_nome: p.nome, preco: p.preco ?? 0, quantidade: 1 }]);
-    }
-    setBuscaProc("");
+    setItens(prev => {
+      const existe = prev.find(it => it.procedimento_id === p.id)
+      if (existe) return prev.map(it => it.procedimento_id === p.id ? { ...it, quantidade: it.quantidade + 1 } : it)
+      return [...prev, { procedimento_id: p.id, procedimento_nome: p.nome, preco: p.preco ?? 0, quantidade: 1 }]
+    })
   }
 
-  function removerItem(id: string) { setItens(prev => prev.filter(i => i.procedimento_id !== id)); }
-  function atualizarPreco(id: string, preco: number) { setItens(prev => prev.map(i => i.procedimento_id === id ? { ...i, preco } : i)); }
-  function atualizarQtd(id: string, quantidade: number) {
-    if (quantidade < 1) return;
-    setItens(prev => prev.map(i => i.procedimento_id === id ? { ...i, quantidade } : i));
+  function removerItem(id: string) {
+    setItens(prev => prev.filter(it => it.procedimento_id !== id))
   }
 
-  const total = itens.reduce((acc, i) => acc + i.preco * i.quantidade, 0);
+  function atualizarQtd(id: string, qtd: number) {
+    if (qtd < 1) return
+    setItens(prev => prev.map(it => it.procedimento_id === id ? { ...it, quantidade: qtd } : it))
+  }
+
+  function atualizarPreco(id: string, preco: number) {
+    setItens(prev => prev.map(it => it.procedimento_id === id ? { ...it, preco } : it))
+  }
+
+  function calcularDataValidade(): string {
+    const opcao = VALIDADE_OPCOES[validadeIdx]
+    const dias = opcao.dias === -1 ? parseInt(validadeCustom) || 0 : opcao.dias
+    const dt = new Date()
+    dt.setDate(dt.getDate() + dias)
+    return dt.toISOString().split("T")[0]
+  }
+
+  const opcaoPersonalizada = VALIDADE_OPCOES[validadeIdx].dias === -1
+  const podeSalvar = !!clienteSel && itens.length > 0 && !salvando && (!opcaoPersonalizada || !!validadeCustom)
 
   async function salvar() {
-    if (!clienteSelecionado || itens.length === 0) return;
-    if (validadeOpcao === "outros" && !validadeCustom) return;
-    setSalvando(true);
-    const diasValidade = validadeOpcao === "outros" ? parseInt(validadeCustom) : parseInt(validadeOpcao);
-    const dataValidade = new Date();
-    dataValidade.setDate(dataValidade.getDate() + diasValidade);
-    const validadeStr = dataValidade.toISOString().split("T")[0];
-    const { data: orc, error } = await supabase.from("orcamentos").insert([{
-      cliente_id: clienteSelecionado.id,
-      cliente_nome: clienteSelecionado.nome,
-      status: "Pendente",
-      total,
-      validade: validadeStr,
-      observacoes: observacoes || null,
-    }]).select().single();
-    if (!error && orc) {
-      await supabase.from("orcamento_itens").insert(
-        itens.map(i => ({ orcamento_id: orc.id, procedimento_id: i.procedimento_id, procedimento_nome: i.procedimento_nome, preco: i.preco, quantidade: i.quantidade }))
-      );
-      onSalvo();
-    }
-    setSalvando(false);
+    if (!podeSalvar || !clienteSel) return
+    setSalvando(true)
+    const supabase = createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) { setSalvando(false); return }
+
+    const { data: orc, error } = await supabase
+      .from("orcamentos")
+      .insert({
+        user_id: user.id,
+        cliente_id: clienteSel.id,
+        cliente_nome: clienteSel.nome,
+        status: "Pendente",
+        total,
+        validade: calcularDataValidade(),
+        observacoes: observacoes || null,
+      })
+      .select("id")
+      .single()
+
+    if (error || !orc) { setSalvando(false); return }
+
+    await supabase.from("orcamento_itens").insert(
+      itens.map(it => ({
+        orcamento_id: orc.id,
+        procedimento_id: it.procedimento_id,
+        procedimento_nome: it.procedimento_nome,
+        preco: it.preco,
+        quantidade: it.quantidade,
+      }))
+    )
+    setSalvando(false)
+    onSaved()
   }
 
-  const inputClass = "w-full h-10 bg-[#13161C] border border-white/10 rounded-lg px-3 text-white text-sm placeholder-white/20 outline-none focus:border-[#4F8EF7] transition-colors";
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onFechar} />
-      <div className="relative w-full max-w-3xl max-h-[92vh] bg-[#181C24] border border-white/10 rounded-2xl shadow-2xl flex flex-col">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-white/5 flex-shrink-0">
+    <div
+      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.65)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50, padding: "1rem" }}
+      onClick={e => { if (e.target === e.currentTarget) onClose() }}
+    >
+      <div style={{ background: "#161A22", borderRadius: 16, width: "100%", maxWidth: 780, maxHeight: "92vh", display: "flex", flexDirection: "column", border: "1px solid #1E2533", overflow: "hidden" }}>
+
+        {/* Header */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "1.25rem 1.5rem", borderBottom: "1px solid #1E2533", flexShrink: 0 }}>
           <div>
-            <div className="text-white font-semibold">Novo orçamento</div>
-            <div className="text-white/40 text-xs mt-0.5">Selecione o paciente e adicione os procedimentos</div>
+            <h2 style={{ color: "#F8FAFC", fontSize: 17, fontWeight: 700, margin: 0 }}>Novo Orçamento</h2>
+            <p style={{ color: "#64748B", fontSize: 13, margin: "2px 0 0" }}>Selecione o paciente e adicione os procedimentos</p>
           </div>
-          <button onClick={onFechar} className="text-white/30 hover:text-white w-8 h-8 flex items-center justify-center rounded-lg hover:bg-white/5">✕</button>
+          <button onClick={onClose} style={{ color: "#94A3B8", background: "none", border: "none", cursor: "pointer", fontSize: 20, lineHeight: 1, padding: 4 }}>✕</button>
         </div>
 
-        <div className="flex-1 overflow-y-auto">
-          <div className="grid grid-cols-1 lg:grid-cols-2 divide-y lg:divide-y-0 lg:divide-x divide-white/5">
+        {/* Corpo — 2 colunas */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", flex: 1, overflow: "hidden", minHeight: 0 }}>
 
-            <div className="p-6 space-y-5">
-              <div>
-                <div className="text-white/40 text-xs font-semibold uppercase tracking-wide mb-2">Paciente *</div>
-                <div ref={buscaRef} className="relative">
-                  {clienteSelecionado ? (
-                    <div className="flex items-center gap-3 p-3 bg-[#4F8EF7]/10 border border-[#4F8EF7]/30 rounded-lg">
-                      <div className="w-8 h-8 rounded-full bg-[#4F8EF7]/20 flex items-center justify-center text-xs font-bold text-[#4F8EF7] flex-shrink-0">
-                        {clienteSelecionado.nome.charAt(0)}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="text-white text-sm font-medium">{clienteSelecionado.nome}</div>
-                        {clienteSelecionado.telefone && <div className="text-white/40 text-xs">{clienteSelecionado.telefone}</div>}
-                      </div>
-                      <button onClick={() => { setClienteSelecionado(null); setBuscaCliente(""); }} className="text-white/30 hover:text-white text-xs">✕</button>
+          {/* Coluna esquerda */}
+          <div style={{ padding: "1.25rem 1.5rem", overflowY: "auto", borderRight: "1px solid #1E2533", display: "flex", flexDirection: "column", gap: "1.25rem" }}>
+
+            {/* Paciente */}
+            <div>
+              <label style={{ display: "block", color: "#64748B", fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>Paciente *</label>
+              <div ref={buscaClienteRef} style={{ position: "relative" }}>
+                {clienteSel ? (
+                  <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 14px", background: "rgba(79,142,247,0.08)", border: "1px solid rgba(79,142,247,0.25)", borderRadius: 8 }}>
+                    <div style={{ width: 32, height: 32, borderRadius: "50%", background: "rgba(79,142,247,0.2)", display: "flex", alignItems: "center", justifyContent: "center", color: "#4F8EF7", fontSize: 13, fontWeight: 700, flexShrink: 0 }}>
+                      {clienteSel.nome.charAt(0).toUpperCase()}
                     </div>
-                  ) : (
-                    <>
-                      <input type="text" value={buscaCliente}
-                        onChange={e => { setBuscaCliente(e.target.value); setMostrarSugestoes(true); }}
-                        onFocus={() => setMostrarSugestoes(true)}
-                        placeholder="Digite o nome do paciente..." className={inputClass} />
-                      {mostrarSugestoes && sugestoesClientes.length > 0 && (
-                        <div className="absolute top-full left-0 right-0 z-50 mt-1 bg-[#1C2130] border border-white/10 rounded-lg overflow-hidden shadow-xl">
-                          {sugestoesClientes.map(c => (
-                            <div key={c.id} onClick={() => { setClienteSelecionado(c); setBuscaCliente(""); setMostrarSugestoes(false); }}
-                              className="px-3 py-2.5 text-sm text-white hover:bg-white/10 cursor-pointer border-b border-white/5 last:border-0">
-                              {c.nome}
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </>
-                  )}
-                </div>
-              </div>
-
-              <div>
-                <div className="text-white/40 text-xs font-semibold uppercase tracking-wide mb-2">Adicionar procedimento</div>
-                <input type="text" value={buscaProc} onChange={e => setBuscaProc(e.target.value)} placeholder="Buscar procedimento..." className={inputClass} />
-                <div className="mt-2 max-h-52 overflow-y-auto space-y-1 pr-1">
-                  {listaProcs.length === 0 ? (
-                    <div className="text-white/30 text-xs text-center py-4">Nenhum procedimento encontrado</div>
-                  ) : listaProcs.map(p => (
-                    <button key={p.id} onClick={() => adicionarItem(p)}
-                      className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-white/5 transition-colors text-left group">
-                      <span className={`text-sm flex-shrink-0 ${p.favorito ? "text-yellow-400" : "text-white/20"}`}>★</span>
-                      <div className="flex-1 min-w-0">
-                        <div className="text-white text-sm truncate">{p.nome}</div>
-                        <div className="text-white/30 text-xs">{p.categoria}</div>
-                      </div>
-                      <div className="flex items-center gap-2 flex-shrink-0">
-                        {p.preco && <span className="text-white/50 text-xs">{formatarMoeda(p.preco)}</span>}
-                        <span className="text-[#4F8EF7] text-xs opacity-0 group-hover:opacity-100 transition-opacity">+ Adicionar</span>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <div className="text-white/40 text-xs font-semibold uppercase tracking-wide mb-2">Validade</div>
-                <select value={validadeOpcao}
-                  onChange={e => { setValidadeOpcao(e.target.value); setValidadeCustom(""); }}
-                  className={inputClass}>
-                  {VALIDADE_OPCOES.map(o => (
-                    <option key={o.valor} value={o.valor}>{o.label}</option>
-                  ))}
-                </select>
-                {validadeOpcao === "outros" && (
-                  <div className="flex items-center gap-2 mt-2">
-                    <input type="number" value={validadeCustom}
-                      onChange={e => setValidadeCustom(e.target.value)}
-                      placeholder="Número de dias" min="1"
-                      className={inputClass} />
-                    <span className="text-white/40 text-sm whitespace-nowrap">dias</span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{ color: "#F8FAFC", fontSize: 14, fontWeight: 500, margin: 0 }}>{clienteSel.nome}</p>
+                      {clienteSel.telefone && <p style={{ color: "#64748B", fontSize: 12, margin: 0 }}>{clienteSel.telefone}</p>}
+                    </div>
+                    <button onClick={() => { setClienteSel(null); setBuscaCliente("") }} style={{ color: "#64748B", background: "none", border: "none", cursor: "pointer", fontSize: 16, padding: 2 }}>✕</button>
                   </div>
+                ) : (
+                  <>
+                    <input
+                      value={buscaCliente}
+                      onChange={e => { setBuscaCliente(e.target.value); setClienteSel(null) }}
+                      onFocus={() => clientesSug.length > 0 && setShowClientes(true)}
+                      placeholder="Digite o nome do paciente..."
+                      style={inputCss}
+                      autoComplete="off"
+                    />
+                    {showClientes && clientesSug.length > 0 && (
+                      <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, background: "#1E2533", borderRadius: 8, border: "1px solid #2D3748", zIndex: 10, overflow: "hidden" }}>
+                        {clientesSug.map(c => (
+                          <button key={c.id} onClick={() => selecionarCliente(c)} style={{ display: "block", width: "100%", padding: "10px 14px", textAlign: "left", color: "#F8FAFC", background: "none", border: "none", borderBottom: "1px solid #2D3748", cursor: "pointer", fontSize: 14 }}>
+                            {c.nome}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
-              <div>
-                <div className="text-white/40 text-xs font-semibold uppercase tracking-wide mb-2">Observações</div>
-                <textarea value={observacoes} onChange={e => setObservacoes(e.target.value)}
-                  placeholder="Condições, formas de pagamento, observações..."
-                  rows={3} className="w-full bg-[#13161C] border border-white/10 rounded-lg px-3 py-2 text-white text-sm placeholder-white/20 outline-none focus:border-[#4F8EF7] transition-colors resize-none" />
+            </div>
+
+            {/* Buscar procedimento */}
+            <div style={{ flex: 1 }}>
+              <label style={{ display: "block", color: "#64748B", fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>Adicionar procedimento</label>
+              <input
+                value={buscaProc}
+                onChange={e => setBuscaProc(e.target.value)}
+                placeholder="Buscar por nome ou categoria..."
+                style={{ ...inputCss, marginBottom: 8 }}
+              />
+              <div style={{ maxHeight: 200, overflowY: "auto" }}>
+                {listaProcs.length === 0 ? (
+                  <p style={{ color: "#475569", fontSize: 13, textAlign: "center", padding: "1rem 0" }}>
+                    {todosProceds.length === 0 ? "Carregando..." : "Nenhum procedimento encontrado"}
+                  </p>
+                ) : listaProcs.map(p => (
+                  <button
+                    key={p.id}
+                    onClick={() => adicionarItem(p)}
+                    style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "8px 10px", background: "none", border: "none", borderRadius: 6, cursor: "pointer", textAlign: "left" }}
+                    onMouseEnter={e => (e.currentTarget.style.background = "rgba(255,255,255,0.04)")}
+                    onMouseLeave={e => (e.currentTarget.style.background = "none")}
+                  >
+                    <span style={{ color: p.favorito ? "#FBBF24" : "#2D3748", fontSize: 14, flexShrink: 0 }}>★</span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <span style={{ color: "#F8FAFC", fontSize: 13, display: "block" }}>{p.nome}</span>
+                      <span style={{ color: "#64748B", fontSize: 11 }}>{p.categoria}</span>
+                    </div>
+                    {p.preco != null && (
+                      <span style={{ color: "#64748B", fontSize: 12, flexShrink: 0 }}>{formatarMoeda(p.preco)}</span>
+                    )}
+                  </button>
+                ))}
               </div>
             </div>
 
-            <div className="p-6 flex flex-col">
-              <div className="text-white/40 text-xs font-semibold uppercase tracking-wide mb-3">
-                Itens {itens.length > 0 && <span className="text-[#4F8EF7]">({itens.length})</span>}
+            {/* Validade */}
+            <div>
+              <label style={{ display: "block", color: "#64748B", fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>Validade</label>
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                {VALIDADE_OPCOES.map((op, idx) => (
+                  <button
+                    key={op.label}
+                    onClick={() => setValidadeIdx(idx)}
+                    style={{
+                      padding: "6px 12px", borderRadius: 20, border: "1px solid",
+                      cursor: "pointer", fontSize: 12, fontWeight: 500,
+                      background: validadeIdx === idx ? "rgba(79,142,247,0.15)" : "transparent",
+                      color: validadeIdx === idx ? "#4F8EF7" : "#64748B",
+                      borderColor: validadeIdx === idx ? "rgba(79,142,247,0.4)" : "#1E2533",
+                    }}
+                  >
+                    {op.label}
+                  </button>
+                ))}
               </div>
-              {itens.length === 0 ? (
-                <div className="flex-1 flex flex-col items-center justify-center text-center py-8">
-                  <div className="text-white/10 text-4xl mb-3">📋</div>
-                  <div className="text-white/30 text-sm">Nenhum procedimento adicionado</div>
-                  <div className="text-white/20 text-xs mt-1">Busque e clique para adicionar</div>
-                </div>
-              ) : (
-                <div className="flex-1 space-y-2 overflow-y-auto pr-1">
-                  {itens.map(item => (
-                    <div key={item.procedimento_id} className="bg-[#13161C] border border-white/5 rounded-xl p-3">
-                      <div className="flex items-start justify-between gap-2 mb-2">
-                        <div className="text-white text-sm font-medium flex-1">{item.procedimento_nome}</div>
-                        <button onClick={() => removerItem(item.procedimento_id)} className="text-white/20 hover:text-red-400 transition-colors text-xs flex-shrink-0">✕</button>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <div className="flex items-center gap-1">
-                          <span className="text-white/30 text-xs">Qtd</span>
-                          <button onClick={() => atualizarQtd(item.procedimento_id, item.quantidade - 1)} className="w-6 h-6 rounded bg-white/5 text-white/50 hover:text-white text-xs flex items-center justify-center">−</button>
-                          <span className="text-white text-sm w-6 text-center">{item.quantidade}</span>
-                          <button onClick={() => atualizarQtd(item.procedimento_id, item.quantidade + 1)} className="w-6 h-6 rounded bg-white/5 text-white/50 hover:text-white text-xs flex items-center justify-center">+</button>
-                        </div>
-                        <div className="flex items-center gap-1 flex-1">
-                          <span className="text-white/30 text-xs">R$</span>
-                          <input type="number" value={item.preco} onChange={e => atualizarPreco(item.procedimento_id, parseFloat(e.target.value) || 0)}
-                            className="flex-1 h-7 bg-[#181C24] border border-white/10 rounded px-2 text-white text-sm outline-none focus:border-[#4F8EF7] transition-colors" />
-                        </div>
-                        <div className="text-white text-sm font-semibold text-right min-w-[80px]">{formatarMoeda(item.preco * item.quantidade)}</div>
-                      </div>
-                    </div>
-                  ))}
+              {opcaoPersonalizada && (
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8 }}>
+                  <input
+                    type="number"
+                    value={validadeCustom}
+                    onChange={e => setValidadeCustom(e.target.value)}
+                    placeholder="Número de dias"
+                    min="1"
+                    style={{ ...inputCss, flex: 1 }}
+                  />
+                  <span style={{ color: "#64748B", fontSize: 13, flexShrink: 0 }}>dias</span>
                 </div>
               )}
-              <div className="mt-4 pt-4 border-t border-white/5">
-                <div className="flex items-center justify-between">
-                  <span className="text-white/40 text-sm">Total</span>
-                  <span className="text-white text-2xl font-bold">{formatarMoeda(total)}</span>
-                </div>
+            </div>
+
+            {/* Observações */}
+            <div>
+              <label style={{ display: "block", color: "#64748B", fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>Observações</label>
+              <textarea
+                value={observacoes}
+                onChange={e => setObservacoes(e.target.value)}
+                placeholder="Condições, formas de pagamento, notas..."
+                rows={3}
+                style={{ ...inputCss, resize: "vertical" }}
+              />
+            </div>
+          </div>
+
+          {/* Coluna direita — itens */}
+          <div style={{ padding: "1.25rem 1.5rem", overflowY: "auto", display: "flex", flexDirection: "column" }}>
+            <label style={{ display: "block", color: "#64748B", fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 12 }}>
+              Itens {itens.length > 0 && <span style={{ color: "#4F8EF7" }}>({itens.length})</span>}
+            </label>
+
+            {itens.length === 0 ? (
+              <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", color: "#475569", gap: 8 }}>
+                <span style={{ fontSize: 36 }}>📋</span>
+                <p style={{ fontSize: 13, margin: 0 }}>Nenhum procedimento adicionado</p>
+                <p style={{ fontSize: 12, margin: 0, color: "#334155" }}>Busque e clique para adicionar</p>
               </div>
+            ) : (
+              <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 8 }}>
+                {itens.map(it => (
+                  <div key={it.procedimento_id} style={{ background: "#0F1117", border: "1px solid #1E2533", borderRadius: 10, padding: "0.75rem" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
+                      <span style={{ color: "#F8FAFC", fontSize: 13, fontWeight: 500, flex: 1, paddingRight: 8 }}>{it.procedimento_nome}</span>
+                      <button onClick={() => removerItem(it.procedimento_id)} style={{ color: "#475569", background: "none", border: "none", cursor: "pointer", fontSize: 16, lineHeight: 1, padding: "0 2px", flexShrink: 0 }}>×</button>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      {/* Qtd */}
+                      <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                        <span style={{ color: "#475569", fontSize: 11 }}>Qtd</span>
+                        <button onClick={() => atualizarQtd(it.procedimento_id, it.quantidade - 1)} style={{ width: 24, height: 24, borderRadius: 4, background: "#1E2533", border: "none", color: "#94A3B8", cursor: "pointer", fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center" }}>−</button>
+                        <span style={{ color: "#F8FAFC", fontSize: 13, minWidth: 20, textAlign: "center" }}>{it.quantidade}</span>
+                        <button onClick={() => atualizarQtd(it.procedimento_id, it.quantidade + 1)} style={{ width: 24, height: 24, borderRadius: 4, background: "#1E2533", border: "none", color: "#94A3B8", cursor: "pointer", fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center" }}>+</button>
+                      </div>
+                      {/* Preço editável */}
+                      <div style={{ display: "flex", alignItems: "center", gap: 4, flex: 1 }}>
+                        <span style={{ color: "#475569", fontSize: 11 }}>R$</span>
+                        <input
+                          type="number"
+                          value={it.preco}
+                          onChange={e => atualizarPreco(it.procedimento_id, parseFloat(e.target.value) || 0)}
+                          style={{ flex: 1, background: "#161A22", border: "1px solid #1E2533", borderRadius: 6, padding: "4px 8px", color: "#F8FAFC", fontSize: 13, outline: "none" }}
+                        />
+                      </div>
+                      <span style={{ color: "#F8FAFC", fontSize: 13, fontWeight: 600, flexShrink: 0 }}>
+                        {formatarMoeda(it.preco * it.quantidade)}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Total */}
+            <div style={{ marginTop: "1rem", paddingTop: "1rem", borderTop: "1px solid #1E2533", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span style={{ color: "#64748B", fontSize: 14 }}>Total</span>
+              <span style={{ color: "#F8FAFC", fontSize: 22, fontWeight: 700 }}>{formatarMoeda(total)}</span>
             </div>
           </div>
         </div>
 
-        <div className="flex items-center justify-between px-6 py-4 border-t border-white/5 flex-shrink-0">
-          <button onClick={onFechar} className="h-9 px-5 bg-white/5 border border-white/10 text-white/60 text-sm rounded-lg hover:text-white transition-colors">Cancelar</button>
-          <button onClick={salvar} disabled={salvando || !clienteSelecionado || itens.length === 0 || (validadeOpcao === "outros" && !validadeCustom)}
-            className="h-9 px-6 bg-gradient-to-r from-[#4F8EF7] to-[#7C5CFC] text-white text-sm font-semibold rounded-lg hover:opacity-90 disabled:opacity-40 transition-opacity">
-            {salvando ? "Salvando..." : "Criar orçamento"}
+        {/* Footer */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "1rem 1.5rem", borderTop: "1px solid #1E2533", flexShrink: 0 }}>
+          <button onClick={onClose} style={btnSec}>Cancelar</button>
+          <button
+            onClick={salvar}
+            disabled={!podeSalvar}
+            style={{ ...btnPrimary, opacity: podeSalvar ? 1 : 0.4, cursor: podeSalvar ? "pointer" : "not-allowed" }}
+          >
+            {salvando ? "Salvando..." : "Criar Orçamento"}
           </button>
         </div>
       </div>
     </div>
-  );
+  )
 }
 
-function ModalVisualizacao({ orcamento, onFechar, onAlterarStatus }: {
-  orcamento: Orcamento;
-  onFechar: () => void;
-  onAlterarStatus: (id: string, status: string) => void;
-}) {
-  const cor = STATUS_CORES[orcamento.status] ?? "#6B7280";
+// ─── Modal Visualização ───────────────────────────────────────────────────────
+
+type ModalVisualizacaoProps = {
+  orcamento: Orcamento
+  onClose: () => void
+  onAlterarStatus: (id: string, status: string) => void
+}
+
+function ModalVisualizacao({ orcamento, onClose, onAlterarStatus }: ModalVisualizacaoProps) {
+  const dias = orcamento.validade ? diasAteValidade(orcamento.validade) : null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onFechar} />
-      <div className="relative w-full max-w-2xl max-h-[90vh] bg-[#181C24] border border-white/10 rounded-2xl shadow-2xl flex flex-col">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-white/5 flex-shrink-0">
-          <div className="text-white font-semibold">Orçamento</div>
-          <div className="flex items-center gap-2">
-            <button onClick={() => window.print()} className="h-8 px-4 bg-white/5 border border-white/10 text-white/60 text-xs rounded-lg hover:text-white transition-colors">🖨️ Imprimir</button>
-            <button onClick={onFechar} className="text-white/30 hover:text-white w-8 h-8 flex items-center justify-center rounded-lg hover:bg-white/5">✕</button>
-          </div>
+    <div
+      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.65)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50, padding: "1rem" }}
+      onClick={e => { if (e.target === e.currentTarget) onClose() }}
+    >
+      <div style={{ background: "#161A22", borderRadius: 16, width: "100%", maxWidth: 540, maxHeight: "90vh", overflowY: "auto", border: "1px solid #1E2533" }}>
+
+        {/* Header */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "1.25rem 1.5rem", borderBottom: "1px solid #1E2533" }}>
+          <h2 style={{ color: "#F8FAFC", fontSize: 17, fontWeight: 700, margin: 0 }}>Orçamento</h2>
+          <button onClick={onClose} style={{ color: "#94A3B8", background: "none", border: "none", cursor: "pointer", fontSize: 20, lineHeight: 1, padding: 4 }}>✕</button>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
-          <div className="flex items-start justify-between">
+        <div style={{ padding: "1.25rem 1.5rem", display: "flex", flexDirection: "column", gap: "1.25rem" }}>
+
+          {/* Meta */}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
             <div>
-              <div className="text-white font-bold text-lg">OdontoOS</div>
-              <div className="text-white/40 text-xs">Sistema de Gestão Odontológica</div>
+              <p style={{ color: "#94A3B8", fontSize: 12, margin: "0 0 4px" }}>Paciente</p>
+              <p style={{ color: "#F8FAFC", fontSize: 16, fontWeight: 600, margin: 0 }}>{orcamento.cliente_nome}</p>
             </div>
-            <div className="text-right">
-              <div className="text-white/40 text-xs">Data</div>
-              <div className="text-white text-sm">{formatarData(orcamento.created_at)}</div>
-              {orcamento.validade && (
-                <>
-                  <div className="text-white/40 text-xs mt-1">Validade</div>
-                  <div className="text-white text-sm">{formatarData(orcamento.validade)}</div>
-                </>
-              )}
+            <div style={{ textAlign: "right" }}>
+              <p style={{ color: "#94A3B8", fontSize: 12, margin: "0 0 4px" }}>
+                {orcamento.validade ? "Válido até" : "Criado em"}
+              </p>
+              <p style={{ color: dias != null && dias < 0 ? "#EF4444" : "#CBD5E1", fontSize: 13, margin: 0, fontWeight: dias != null && dias < 0 ? 600 : 400 }}>
+                {orcamento.validade ? formatarData(orcamento.validade) : formatarData(orcamento.created_at)}
+                {dias != null && dias < 0 && " (vencido)"}
+              </p>
             </div>
           </div>
 
-          <div className="bg-white/5 rounded-xl p-4">
-            <div className="text-white/40 text-xs uppercase tracking-wide mb-1">Paciente</div>
-            <div className="text-white font-semibold">{orcamento.cliente_nome}</div>
-          </div>
-
-          <div>
-            <div className="text-white/40 text-xs uppercase tracking-wide mb-2">Procedimentos</div>
-            <div className="border border-white/10 rounded-xl overflow-hidden">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-white/5">
-                    <th className="text-left text-white/30 text-xs px-4 py-2">Procedimento</th>
-                    <th className="text-center text-white/30 text-xs px-4 py-2">Qtd</th>
-                    <th className="text-right text-white/30 text-xs px-4 py-2">Valor unit.</th>
-                    <th className="text-right text-white/30 text-xs px-4 py-2">Total</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {orcamento.itens?.map((item, i) => (
-                    <tr key={i} className="border-b border-white/5 last:border-0">
-                      <td className="text-white text-sm px-4 py-2.5">{item.procedimento_nome}</td>
-                      <td className="text-white/50 text-sm px-4 py-2.5 text-center">{item.quantidade}</td>
-                      <td className="text-white/50 text-sm px-4 py-2.5 text-right">{formatarMoeda(item.preco)}</td>
-                      <td className="text-white text-sm px-4 py-2.5 text-right font-medium">{formatarMoeda(item.preco * item.quantidade)}</td>
-                    </tr>
+          {/* Itens */}
+          <div style={{ background: "#0F1117", borderRadius: 10, overflow: "hidden", border: "1px solid #1E2533" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <thead>
+                <tr style={{ borderBottom: "1px solid #1E2533" }}>
+                  {["Procedimento", "Qtd", "Valor unit.", "Total"].map((col, i) => (
+                    <th key={col} style={{ padding: "10px 14px", color: "#64748B", fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em", textAlign: i === 0 ? "left" : "right" }}>
+                      {col}
+                    </th>
                   ))}
-                </tbody>
-              </table>
+                </tr>
+              </thead>
+              <tbody>
+                {orcamento.orcamento_itens.length === 0 ? (
+                  <tr>
+                    <td colSpan={4} style={{ padding: "1.5rem", textAlign: "center", color: "#475569", fontSize: 13 }}>Sem itens registrados.</td>
+                  </tr>
+                ) : orcamento.orcamento_itens.map((it, i) => (
+                  <tr key={it.id} style={{ borderBottom: i < orcamento.orcamento_itens.length - 1 ? "1px solid #1E2533" : "none" }}>
+                    <td style={{ padding: "10px 14px", color: "#F8FAFC", fontSize: 13 }}>{it.procedimento_nome}</td>
+                    <td style={{ padding: "10px 14px", color: "#94A3B8", fontSize: 13, textAlign: "right" }}>{it.quantidade}</td>
+                    <td style={{ padding: "10px 14px", color: "#94A3B8", fontSize: 13, textAlign: "right" }}>{formatarMoeda(it.preco)}</td>
+                    <td style={{ padding: "10px 14px", color: "#F8FAFC", fontSize: 13, fontWeight: 600, textAlign: "right" }}>{formatarMoeda(it.preco * it.quantidade)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <div style={{ display: "flex", justifyContent: "space-between", padding: "12px 14px", borderTop: "2px solid #1E2533" }}>
+              <span style={{ color: "#94A3B8", fontSize: 14, fontWeight: 600 }}>Total</span>
+              <span style={{ color: "#F8FAFC", fontSize: 20, fontWeight: 700 }}>{formatarMoeda(orcamento.total)}</span>
             </div>
           </div>
 
-          <div className="flex justify-between items-center pt-2 border-t border-white/10">
-            <span className="text-white/40">Total do orçamento</span>
-            <span className="text-white text-2xl font-bold">{formatarMoeda(orcamento.total)}</span>
-          </div>
-
+          {/* Observações */}
           {orcamento.observacoes && (
-            <div className="bg-white/5 rounded-xl p-4">
-              <div className="text-white/40 text-xs uppercase tracking-wide mb-1">Observações</div>
-              <div className="text-white/70 text-sm">{orcamento.observacoes}</div>
+            <div style={{ background: "#0F1117", borderRadius: 8, padding: "0.75rem 1rem", border: "1px solid #1E2533" }}>
+              <p style={{ color: "#64748B", fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", margin: "0 0 6px" }}>Observações</p>
+              <p style={{ color: "#CBD5E1", fontSize: 13, margin: 0 }}>{orcamento.observacoes}</p>
             </div>
           )}
 
+          {/* Alterar status */}
           <div>
-            <div className="text-white/40 text-xs uppercase tracking-wide mb-2">Alterar status</div>
-            <div className="flex gap-2 flex-wrap">
-              {["Pendente", "Aprovado", "Recusado"].map(s => (
-                <button key={s} onClick={() => onAlterarStatus(orcamento.id, s)}
-                  className={`text-sm px-4 h-8 rounded-lg font-medium transition-all border ${
-                    orcamento.status === s ? "bg-white/10 border-white/20 text-white" : "bg-white/5 border-white/5 text-white/40 hover:text-white"
-                  }`}>
+            <p style={{ color: "#64748B", fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", margin: "0 0 8px" }}>Status</p>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              {STATUS_ORCAMENTO.map(s => (
+                <button
+                  key={s}
+                  onClick={() => onAlterarStatus(orcamento.id, s)}
+                  style={{
+                    padding: "7px 14px", borderRadius: 8, border: "1px solid",
+                    cursor: "pointer", fontSize: 13, fontWeight: 500,
+                    background: orcamento.status === s ? `${STATUS_CORES[s]}20` : "transparent",
+                    color: orcamento.status === s ? STATUS_CORES[s] : "#64748B",
+                    borderColor: orcamento.status === s ? `${STATUS_CORES[s]}40` : "#1E2533",
+                  }}
+                >
                   {s}
                 </button>
               ))}
@@ -422,144 +608,230 @@ function ModalVisualizacao({ orcamento, onFechar, onAlterarStatus }: {
         </div>
       </div>
     </div>
-  );
+  )
 }
 
+// ─── Página Principal ─────────────────────────────────────────────────────────
+
 export default function Orcamentos() {
-  const [orcamentos, setOrcamentos] = useState<Orcamento[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [filtroStatus, setFiltroStatus] = useState("todos");
-  const [busca, setBusca] = useState("");
-  const [mostrarNovo, setMostrarNovo] = useState(false);
-  const [orcamentoAberto, setOrcamentoAberto] = useState<Orcamento | null>(null);
-  const supabase = createClient();
+  const [orcamentos, setOrcamentos] = useState<Orcamento[]>([])
+  const [carregando, setCarregando] = useState(true)
+  const [modalNovo, setModalNovo] = useState(false)
+  const [visualizando, setVisualizando] = useState<Orcamento | null>(null)
+  const [filtroStatus, setFiltroStatus] = useState("Todos")
+  const [busca, setBusca] = useState("")
+  const [tick, setTick] = useState(0)
 
-  const carregarOrcamentos = useCallback(async () => {
-    setLoading(true);
-    const { data } = await supabase.from("orcamentos").select("*").order("created_at", { ascending: false });
-    if (data) {
-      const comItens = await Promise.all(data.map(async (o) => {
-        const { data: itens } = await supabase.from("orcamento_itens").select("*").eq("orcamento_id", o.id);
-        return { ...o, itens: itens ?? [] };
-      }));
-      setOrcamentos(comItens);
-    }
-    setLoading(false);
-  }, [supabase]);
+  useEffect(() => {
+    const supabase = createClient()
+    setCarregando(true)
+    supabase
+      .from("orcamentos")
+      .select("*, orcamento_itens(*)")
+      .order("created_at", { ascending: false })
+      .then(({ data }) => {
+        setOrcamentos((data ?? []) as Orcamento[])
+        setCarregando(false)
+      })
+  }, [tick])
 
-  useEffect(() => { carregarOrcamentos(); }, [carregarOrcamentos]);
+  const reload = () => setTick(t => t + 1)
 
-  async function alterarStatus(id: string, status: string) {
-    await supabase.from("orcamentos").update({ status }).eq("id", id);
-    setOrcamentos(prev => prev.map(o => o.id === id ? { ...o, status } : o));
-    if (orcamentoAberto?.id === id) setOrcamentoAberto(prev => prev ? { ...prev, status } : null);
+  async function alterarStatus(id: string, novoStatus: string) {
+    const supabase = createClient()
+    await supabase.from("orcamentos").update({ status: novoStatus }).eq("id", id)
+    setOrcamentos(prev => prev.map(o => o.id === id ? { ...o, status: novoStatus } : o))
+    if (visualizando?.id === id) setVisualizando(prev => prev ? { ...prev, status: novoStatus } : null)
   }
 
-  const filtrados = orcamentos.filter(o => {
-    const statusOk = filtroStatus === "todos" || o.status === filtroStatus;
-    const buscaOk = o.cliente_nome.toLowerCase().includes(busca.toLowerCase());
-    return statusOk && buscaOk;
-  });
+  async function excluir(id: string) {
+    if (!confirm("Excluir este orçamento e todos os seus itens?")) return
+    const supabase = createClient()
+    await supabase.from("orcamento_itens").delete().eq("orcamento_id", id)
+    await supabase.from("orcamentos").delete().eq("id", id)
+    reload()
+  }
 
-  const totais = {
-    Pendente: orcamentos.filter(o => o.status === "Pendente").length,
-    Aprovado: orcamentos.filter(o => o.status === "Aprovado").length,
-    Recusado: orcamentos.filter(o => o.status === "Recusado").length,
-  };
+  // KPIs
+  const pendentes = orcamentos.filter(o => o.status === "Pendente")
+  const aprovados = orcamentos.filter(o => o.status === "Aprovado")
+  const totalPendente = pendentes.reduce((acc, o) => acc + o.total, 0)
+  const totalAprovado = aprovados.reduce((acc, o) => acc + o.total, 0)
+
+  const hoje = new Date()
+  const firstDay = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, "0")}-01`
+  const doMes = orcamentos.filter(o => o.created_at >= firstDay).length
+
+  // Lista filtrada
+  const listaFiltrada = orcamentos.filter(o => {
+    const statusOk = filtroStatus === "Todos" || o.status === filtroStatus
+    const buscaOk = o.cliente_nome.toLowerCase().includes(busca.toLowerCase())
+    return statusOk && buscaOk
+  })
 
   return (
-    <div>
-      <div className="flex items-center justify-between mb-6">
+    <div style={{ padding: "1.5rem", maxWidth: 1200, margin: "0 auto" }}>
+
+      {/* Header */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "1.5rem", gap: "1rem" }}>
         <div>
-          <h1 className="text-white text-xl font-semibold">Orçamentos</h1>
-          <p className="text-white/40 text-sm mt-1">{orcamentos.length} orçamento{orcamentos.length !== 1 ? "s" : ""} no total</p>
+          <h1 style={{ color: "#F8FAFC", fontSize: 24, fontWeight: 700, margin: "0 0 4px" }}>Orçamentos</h1>
+          <p style={{ color: "#64748B", fontSize: 14, margin: 0 }}>{orcamentos.length} orçamento{orcamentos.length !== 1 ? "s" : ""} no total</p>
         </div>
-        <button onClick={() => setMostrarNovo(true)}
-          className="flex items-center gap-2 bg-gradient-to-r from-[#4F8EF7] to-[#7C5CFC] text-white text-sm font-semibold px-4 h-9 rounded-lg hover:opacity-90 transition-opacity">
-          + Novo orçamento
-        </button>
+        <button onClick={() => setModalNovo(true)} style={btnPrimary}>+ Novo Orçamento</button>
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
+      {/* KPIs */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "1rem", marginBottom: "1.5rem" }}>
         {[
-          { label: "Total", valor: orcamentos.length, cor: "#4F8EF7", filtro: "todos" },
-          { label: "Pendentes", valor: totais.Pendente, cor: "#F59E0B", filtro: "Pendente" },
-          { label: "Aprovados", valor: totais.Aprovado, cor: "#22C55E", filtro: "Aprovado" },
-          { label: "Recusados", valor: totais.Recusado, cor: "#EF4444", filtro: "Recusado" },
-        ].map(k => (
-          <div key={k.label} className="bg-[#1E2330] border border-white/5 rounded-xl p-4 cursor-pointer hover:bg-white/5 transition-colors"
-            onClick={() => setFiltroStatus(k.filtro)}>
-            <div className="text-white/40 text-xs font-semibold uppercase tracking-wide mb-2">{k.label}</div>
-            <div className="text-2xl font-bold" style={{ color: k.cor }}>{k.valor}</div>
+          { label: "Pendentes", valor: String(pendentes.length), sub: formatarMoeda(totalPendente), cor: "#F59E0B" },
+          { label: "Aprovados", valor: String(aprovados.length), sub: formatarMoeda(totalAprovado), cor: "#22C55E" },
+          { label: "Criados este mês", valor: String(doMes), sub: "orçamentos", cor: "#4F8EF7" },
+          { label: "Em aberto", valor: formatarMoeda(totalPendente + totalAprovado), sub: `${pendentes.length + aprovados.length} orçamentos`, cor: "#7C5CFC" },
+        ].map(kpi => (
+          <div key={kpi.label} style={{ background: "#161A22", borderRadius: 12, padding: "1.25rem", border: "1px solid #1E2533" }}>
+            <p style={{ color: "#64748B", fontSize: 13, margin: "0 0 6px" }}>{kpi.label}</p>
+            <p style={{ color: kpi.cor, fontSize: 24, fontWeight: 700, margin: "0 0 2px" }}>{kpi.valor}</p>
+            <p style={{ color: "#475569", fontSize: 12, margin: 0 }}>{kpi.sub}</p>
           </div>
         ))}
       </div>
 
-      <div className="flex gap-3 mb-4 flex-wrap">
-        <div className="flex items-center gap-2 bg-[#1E2330] border border-white/10 rounded-lg px-3 h-10 flex-1 min-w-[200px]">
-          <span className="text-white/30 text-sm">🔍</span>
-          <input type="text" value={busca} onChange={e => setBusca(e.target.value)}
-            placeholder="Buscar por paciente..." className="flex-1 bg-transparent text-white text-sm placeholder-white/30 outline-none" />
-          {busca && <button onClick={() => setBusca("")} className="text-white/30 hover:text-white text-xs">✕</button>}
+      {/* Filtros */}
+      <div style={{ display: "flex", gap: "0.75rem", marginBottom: "1rem", alignItems: "center", flexWrap: "wrap" }}>
+        {/* Busca */}
+        <div style={{ display: "flex", alignItems: "center", gap: 8, background: "#161A22", border: "1px solid #1E2533", borderRadius: 8, padding: "0 12px", height: 40, flex: 1, minWidth: 200 }}>
+          <span style={{ color: "#475569", fontSize: 14 }}>🔍</span>
+          <input
+            value={busca}
+            onChange={e => setBusca(e.target.value)}
+            placeholder="Buscar por paciente..."
+            style={{ flex: 1, background: "none", border: "none", color: "#F8FAFC", fontSize: 14, outline: "none" }}
+          />
+          {busca && (
+            <button onClick={() => setBusca("")} style={{ color: "#475569", background: "none", border: "none", cursor: "pointer", fontSize: 14 }}>✕</button>
+          )}
         </div>
-        <select value={filtroStatus} onChange={e => setFiltroStatus(e.target.value)}
-          className="h-10 bg-[#1E2330] border border-white/10 rounded-lg px-3 text-white text-sm outline-none focus:border-[#4F8EF7] transition-colors">
-          <option value="todos">Todos os status</option>
-          <option value="Pendente">Pendente</option>
-          <option value="Aprovado">Aprovado</option>
-          <option value="Recusado">Recusado</option>
-        </select>
+
+        {/* Pills de status */}
+        <div style={{ display: "flex", gap: 6 }}>
+          {["Todos", ...STATUS_ORCAMENTO].map(s => (
+            <button
+              key={s}
+              onClick={() => setFiltroStatus(s)}
+              style={{
+                padding: "6px 14px", borderRadius: 20, border: "1px solid",
+                cursor: "pointer", fontSize: 13, fontWeight: 500,
+                background: filtroStatus === s ? `${STATUS_CORES[s] ?? "#4F8EF7"}20` : "transparent",
+                color: filtroStatus === s ? (STATUS_CORES[s] ?? "#4F8EF7") : "#64748B",
+                borderColor: filtroStatus === s ? `${STATUS_CORES[s] ?? "#4F8EF7"}40` : "#1E2533",
+              }}
+            >
+              {s}
+            </button>
+          ))}
+        </div>
+
+        <span style={{ color: "#64748B", fontSize: 13 }}>
+          {listaFiltrada.length} {listaFiltrada.length === 1 ? "resultado" : "resultados"}
+        </span>
       </div>
 
-      <div className="bg-[#1E2330] border border-white/5 rounded-xl overflow-hidden">
-        {loading ? (
-          <div className="p-8 text-center text-white/40 text-sm">Carregando orçamentos...</div>
-        ) : filtrados.length === 0 ? (
-          <div className="p-8 text-center">
-            <div className="text-white/20 text-4xl mb-3">📄</div>
-            <div className="text-white/40 text-sm">{busca || filtroStatus !== "todos" ? "Nenhum orçamento encontrado" : "Nenhum orçamento criado ainda"}</div>
-            {!busca && filtroStatus === "todos" && (
-              <button onClick={() => setMostrarNovo(true)} className="mt-3 text-[#4F8EF7] text-sm hover:underline">Criar primeiro orçamento →</button>
+      {/* Tabela */}
+      <div style={{ background: "#161A22", borderRadius: 12, border: "1px solid #1E2533", overflow: "hidden" }}>
+        {carregando ? (
+          <div style={{ padding: "3rem", textAlign: "center", color: "#64748B", fontSize: 14 }}>Carregando...</div>
+        ) : listaFiltrada.length === 0 ? (
+          <div style={{ padding: "3rem", textAlign: "center" }}>
+            <p style={{ color: "#64748B", fontSize: 14, margin: "0 0 8px" }}>
+              {busca || filtroStatus !== "Todos" ? "Nenhum orçamento encontrado." : "Nenhum orçamento criado ainda."}
+            </p>
+            {!busca && filtroStatus === "Todos" && (
+              <button onClick={() => setModalNovo(true)} style={{ color: "#4F8EF7", background: "none", border: "none", cursor: "pointer", fontSize: 14 }}>
+                Criar primeiro orçamento →
+              </button>
             )}
           </div>
         ) : (
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-white/5">
-                <th className="text-left text-white/30 text-xs font-semibold uppercase tracking-wide px-4 py-3">Paciente</th>
-                <th className="text-left text-white/30 text-xs font-semibold uppercase tracking-wide px-4 py-3 hidden md:table-cell">Itens</th>
-                <th className="text-left text-white/30 text-xs font-semibold uppercase tracking-wide px-4 py-3 hidden lg:table-cell">Validade</th>
-                <th className="text-left text-white/30 text-xs font-semibold uppercase tracking-wide px-4 py-3">Total</th>
-                <th className="text-left text-white/30 text-xs font-semibold uppercase tracking-wide px-4 py-3">Status</th>
-                <th className="px-4 py-3"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtrados.map(o => {
-                const cor = STATUS_CORES[o.status] ?? "#6B7280";
-                return (
-                  <tr key={o.id} className="border-b border-white/5 hover:bg-white/3 transition-colors cursor-pointer" onClick={() => setOrcamentoAberto(o)}>
-                    <td className="px-4 py-3">
-                      <div className="text-white text-sm font-medium">{o.cliente_nome}</div>
-                      <div className="text-white/30 text-xs">{formatarData(o.created_at)}</div>
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <thead>
+                <tr style={{ borderBottom: "1px solid #1E2533" }}>
+                  {["Paciente", "Criado", "Validade", "Itens", "Total", "Status", "Ações"].map(col => (
+                    <th key={col} style={{ padding: "12px 16px", textAlign: "left", color: "#64748B", fontSize: 12, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", whiteSpace: "nowrap" }}>
+                      {col}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {listaFiltrada.map((o, i) => (
+                  <tr
+                    key={o.id}
+                    style={{ borderBottom: i < listaFiltrada.length - 1 ? "1px solid #1E2533" : "none", cursor: "pointer" }}
+                    onClick={() => setVisualizando(o)}
+                    onMouseEnter={e => (e.currentTarget.style.background = "rgba(255,255,255,0.02)")}
+                    onMouseLeave={e => (e.currentTarget.style.background = "none")}
+                  >
+                    <td style={{ padding: "12px 16px" }}>
+                      <span style={{ color: "#F8FAFC", fontSize: 14, fontWeight: 500 }}>{o.cliente_nome}</span>
                     </td>
-                    <td className="px-4 py-3 text-white/50 text-sm hidden md:table-cell">{o.itens?.length ?? 0} proc.</td>
-                    <td className="px-4 py-3 hidden lg:table-cell"><ValidadeTag validade={o.validade} /></td>
-                    <td className="px-4 py-3"><span className="text-white font-semibold text-sm">{formatarMoeda(o.total)}</span></td>
-                    <td className="px-4 py-3">
-                      <span className="text-xs font-semibold px-2 py-1 rounded-full" style={{ background: `${cor}20`, color: cor }}>{o.status}</span>
+                    <td style={{ padding: "12px 16px", color: "#94A3B8", fontSize: 13, whiteSpace: "nowrap" }}>
+                      {formatarData(o.created_at)}
                     </td>
-                    <td className="px-4 py-3 text-right"><span className="text-white/20 hover:text-white text-xs transition-colors">Ver →</span></td>
+                    <td style={{ padding: "12px 16px", whiteSpace: "nowrap" }}>
+                      {o.validade ? <ValidadeTag validade={o.validade} /> : <span style={{ color: "#475569", fontSize: 13 }}>—</span>}
+                    </td>
+                    <td style={{ padding: "12px 16px", color: "#94A3B8", fontSize: 13 }}>
+                      {o.orcamento_itens.length} {o.orcamento_itens.length === 1 ? "item" : "itens"}
+                    </td>
+                    <td style={{ padding: "12px 16px", color: "#F8FAFC", fontSize: 14, fontWeight: 700, whiteSpace: "nowrap" }}>
+                      {formatarMoeda(o.total)}
+                    </td>
+                    <td style={{ padding: "12px 16px" }}>
+                      <span style={{ background: `${STATUS_CORES[o.status] ?? "#6B7280"}20`, color: STATUS_CORES[o.status] ?? "#6B7280", padding: "3px 10px", borderRadius: 20, fontSize: 12, fontWeight: 600 }}>
+                        {o.status}
+                      </span>
+                    </td>
+                    <td style={{ padding: "12px 16px" }} onClick={e => e.stopPropagation()}>
+                      <div style={{ display: "flex", gap: 6 }}>
+                        {o.status === "Pendente" && (
+                          <button onClick={() => alterarStatus(o.id, "Aprovado")} style={{ ...btnSec, fontSize: 12, padding: "5px 10px", color: "#22C55E" }}>
+                            Aprovar
+                          </button>
+                        )}
+                        {o.status === "Aprovado" && (
+                          <button onClick={() => alterarStatus(o.id, "Recusado")} style={{ ...btnSec, fontSize: 12, padding: "5px 10px", color: "#F59E0B" }}>
+                            Recusar
+                          </button>
+                        )}
+                        <button onClick={() => excluir(o.id)} style={{ ...btnSec, fontSize: 12, padding: "5px 10px", color: "#EF4444" }}>
+                          Excluir
+                        </button>
+                      </div>
+                    </td>
                   </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
 
-      {mostrarNovo && <ModalNovoOrcamento onFechar={() => setMostrarNovo(false)} onSalvo={() => { setMostrarNovo(false); carregarOrcamentos(); }} />}
-      {orcamentoAberto && <ModalVisualizacao orcamento={orcamentoAberto} onFechar={() => setOrcamentoAberto(null)} onAlterarStatus={alterarStatus} />}
+      {/* Modais */}
+      {modalNovo && (
+        <ModalNovoOrcamento
+          onClose={() => setModalNovo(false)}
+          onSaved={() => { setModalNovo(false); reload() }}
+        />
+      )}
+      {visualizando && (
+        <ModalVisualizacao
+          orcamento={visualizando}
+          onClose={() => setVisualizando(null)}
+          onAlterarStatus={alterarStatus}
+        />
+      )}
     </div>
-  );
+  )
 }
