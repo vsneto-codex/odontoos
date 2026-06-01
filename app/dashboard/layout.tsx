@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut } from "@/app/actions/auth";
@@ -24,7 +24,26 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [isSidebarHidden, setIsSidebarHidden] = useState(false);
   const pathname = usePathname();
+
+  useEffect(() => {
+    function onFSChange() {
+      if (!document.fullscreenElement) setIsSidebarHidden(false);
+    }
+    document.addEventListener("fullscreenchange", onFSChange);
+    return () => document.removeEventListener("fullscreenchange", onFSChange);
+  }, []);
+
+  function toggleSidebarAndFullscreen() {
+    if (!isSidebarHidden) {
+      document.documentElement.requestFullscreen();
+      setIsSidebarHidden(true);
+    } else {
+      document.exitFullscreen();
+      setIsSidebarHidden(false);
+    }
+  }
 
   return (
     <div className="flex h-screen overflow-hidden">
@@ -43,7 +62,7 @@ export default function DashboardLayout({
           fixed md:static inset-y-0 left-0 z-30
           w-64 bg-[#181C24] border-r border-white/5
           flex flex-col transition-transform duration-300
-          ${sidebarOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"}
+          ${isSidebarHidden ? "hidden" : sidebarOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"}
         `}
       >
         {/* Logo */}
@@ -136,8 +155,12 @@ export default function DashboardLayout({
             <button className="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center text-white/50 hover:text-white transition-colors text-sm">
               🔔
             </button>
-            <button className="flex items-center gap-2 bg-gradient-to-r from-[#4F8EF7] to-[#7C5CFC] text-white text-xs font-semibold px-3 h-8 rounded-lg hover:opacity-90 transition-opacity">
-              + Agendar
+            <button
+              onClick={toggleSidebarAndFullscreen}
+              title={isSidebarHidden ? "Sair da tela cheia" : "Tela cheia"}
+              className="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center text-white/50 hover:text-white transition-colors text-sm"
+            >
+              {isSidebarHidden ? "✕" : "⛶"}
             </button>
             <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#4F8EF7] to-[#7C5CFC] flex items-center justify-center text-xs font-bold text-white">
               AL

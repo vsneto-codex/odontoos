@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useSearchParams } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
 
 type Cliente = {
@@ -216,14 +217,19 @@ function ModalPaciente({
 }
 
 export default function Pacientes() {
+  const searchParams = useSearchParams();
   const [clientes, setClientes] = useState<Cliente[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [busca, setBusca] = useState("");
   const [mostrarForm, setMostrarForm] = useState(false);
   const [salvando, setSalvando] = useState(false);
   const [clienteSelecionado, setClienteSelecionado] = useState<Cliente | null>(null);
   const [form, setForm] = useState({ nome: "", telefone: "", email: "", cpf: "" });
   const supabase = createClient();
+
+  useEffect(() => {
+    if (searchParams.get("novo") === "true") setMostrarForm(true);
+  }, [searchParams]);
 
   const carregarClientes = useCallback(async () => {
     setLoading(true);

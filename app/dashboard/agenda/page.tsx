@@ -1,13 +1,15 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
 
 const HORAS = ["07:00","08:00","09:00","10:00","11:00","12:00","13:00","14:00","15:00","16:00","17:00","18:00","19:00"];
 const DIAS = ["Seg","Ter","Qua","Qui","Sex","Sáb"];
 
-const STATUS_PADRAO = ["Confirmado","Aguardando","Em atendimento","Finalizado","Cancelado","Urgência"];
+const STATUS_PADRAO = ["Agendado","Confirmado","Cancelado","Urgência"];
 const STATUS_CORES: Record<string, string> = {
+  "Agendado": "#8B5CF6",
   "Confirmado": "#4F8EF7",
   "Aguardando": "#F59E0B",
   "Em atendimento": "#22C55E",
@@ -15,23 +17,6 @@ const STATUS_CORES: Record<string, string> = {
   "Cancelado": "#EF4444",
   "Urgência": "#EC4899",
 };
-
-const PROCEDIMENTOS_PADRAO = [
-  "Avaliação clínica inicial","Consulta de rotina","Limpeza dental (profilaxia)","Aplicação de flúor",
-  "Selante dental","Orientação de higiene bucal","Raspagem de tártaro","Polimento dental",
-  "Restauração em resina","Restauração em amálgama","Reconstrução dental","Fechamento de diastema",
-  "Facetas em resina","Facetas em porcelana","Coroas dentárias","Clareamento dental caseiro",
-  "Clareamento dental a laser","Lentes de contato dental","Harmonização do sorriso","Gengivoplastia estética",
-  "Tratamento de canal","Retratamento de canal","Pulpectomia","Tratamento de urgência endodôntica",
-  "Limpeza profunda","Raspagem subgengival","Curetagem periodontal","Cirurgia periodontal","Enxerto gengival",
-  "Extração simples","Extração de siso","Cirurgia oral menor","Frenectomia","Biópsia bucal",
-  "Implante dentário","Enxerto ósseo","Levantamento de seio maxilar","Prótese sobre implante",
-  "Prótese total","Prótese parcial removível","Prótese fixa","Ponte dentária","Coroa provisória",
-  "Aparelho fixo","Aparelho móvel","Alinhadores invisíveis","Manutenção ortodôntica","Contenção ortodôntica",
-  "Atendimento infantil","Aplicação de flúor infantil","Extração de dente de leite","Mantenedor de espaço",
-  "Radiografia panorâmica","Radiografia periapical","Tomografia odontológica","Escaneamento intraoral",
-  "Atendimento de dor aguda","Drenagem de abscesso","Reparo provisório","Controle de sangramento","Outro",
-];
 
 type Consulta = {
   id: number;
@@ -63,52 +48,30 @@ function toISO(data: Date) {
   return data.toISOString().split("T")[0];
 }
 
-function formatarDataInput(valor: string) {
-  const nums = valor.replace(/\D/g, "").slice(0, 8);
-  if (nums.length <= 2) return nums;
-  if (nums.length <= 4) return `${nums.slice(0,2)}/${nums.slice(2)}`;
-  return `${nums.slice(0,2)}/${nums.slice(2,4)}/${nums.slice(4)}`;
-}
-
-function parseDateBR(valor: string): string {
-  const parts = valor.split("/");
-  if (parts.length === 3 && parts[2].length === 4) {
-    return `${parts[2]}-${parts[1]}-${parts[0]}`;
-  }
-  return "";
-}
-
 export default function Agenda() {
+  const router = useRouter();
   const [consultas, setConsultas] = useState<Consulta[]>([]);
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [loading, setLoading] = useState(true);
   const [consultaSelecionada, setConsultaSelecionada] = useState<Consulta | null>(null);
   const [mostrarModal, setMostrarModal] = useState(false);
-  const [mostrarForm, setMostrarForm] = useState(false);
-  const [salvando, setSalvando] = useState(false);
   const [semanaAtual, setSemanaAtual] = useState(getSegundaFeira(new Date()));
-  const [procedimentos, setProcedimentos] = useState(PROCEDIMENTOS_PADRAO);
-  const [statusLista, setStatusLista] = useState(STATUS_PADRAO);
-  const [buscaCliente, setBuscaCliente] = useState("");
-  const [mostrarSugestoes, setMostrarSugestoes] = useState(false);
-  const [dataInput, setDataInput] = useState("");
-  const [procedimentoCustom, setProcedimentoCustom] = useState("");
-  const [statusCustom, setStatusCustom] = useState("");
-  const supabase = createClient();
-  const buscaRef = useRef<HTMLDivElement>(null);
+  const [statusLista] = useState(STATUS_PADRAO);
+  const [tipoAtendimento, setTipoAtendimento] = useState<string | null>(null);
 
-  const [form, setForm] = useState({
-    cliente_nome: "",
-    procedimento: "",
-    procedimento_outro: "",
-    profissional: "Dr. Leandro Pássaro",
-    data: "",
-    hora: "08:00",
-    duracao: 1,
-    status: "Confirmado",
-    status_outro: "",
-    observacoes: "",
-  });
+  // ── Modo de visualização ──
+  const [modoVisualizacao, setModoVisualizacao] = useState<"semana" | "dia">("semana");
+  const [diaSelecionado, setDiaSelecionado] = useState<Date>(new Date());
+
+  // ── Agendamento rápido ──
+  const [slotRapido, setSlotRapido] = useState<{ data: string; hora: string } | null>(null);
+  const [buscaRapida, setBuscaRapida] = useState("");
+  const [mostrarSugestoesRapidas, setMostrarSugestoesRapidas] = useState(false);
+  const [convenioRapido, setConvenioRapido] = useState<"particular" | "convenio">("particular");
+  const [salvandoRapido, setSalvandoRapido] = useState(false);
+
+  const supabase = createClient();
+  const buscaRapidaRef = useRef<HTMLDivElement>(null);
 
   async function carregarDados() {
     setLoading(true);
@@ -125,51 +88,48 @@ export default function Agenda() {
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
-      if (buscaRef.current && !buscaRef.current.contains(e.target as Node)) {
-        setMostrarSugestoes(false);
+      if (buscaRapidaRef.current && !buscaRapidaRef.current.contains(e.target as Node)) {
+        setMostrarSugestoesRapidas(false);
       }
     }
     document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
 
-  async function salvarConsulta() {
-    const dataISO = parseDateBR(dataInput);
-    if (!form.cliente_nome || !dataISO || !form.hora) return;
+  useEffect(() => {
+    if (!consultaSelecionada) { setTipoAtendimento(null); return; }
+    supabase
+      .from("prontuarios")
+      .select("id")
+      .eq("cliente_nome", consultaSelecionada.cliente_nome)
+      .limit(1)
+      .then(({ data }) => {
+        setTipoAtendimento(data && data.length > 0 ? "Retorno" : "1ª consulta");
+      });
+  }, [consultaSelecionada]);
 
-    const procFinal = form.procedimento === "Outro" ? procedimentoCustom : form.procedimento;
-    const statusFinal = form.status === "Outro" ? statusCustom : form.status;
-
-    if (form.procedimento === "Outro" && procedimentoCustom && !procedimentos.includes(procedimentoCustom)) {
-      setProcedimentos(prev => [...prev.slice(0, -1), procedimentoCustom, "Outro"]);
-    }
-    if (form.status === "Outro" && statusCustom && !statusLista.includes(statusCustom)) {
-      setStatusLista(prev => [...prev, statusCustom]);
-      STATUS_CORES[statusCustom] = "#14B8A6";
-    }
-
-    setSalvando(true);
+  async function salvarRapido() {
+    if (!slotRapido || !buscaRapida.trim()) return;
+    setSalvandoRapido(true);
+    const { data: { user } } = await supabase.auth.getUser();
     const { error } = await supabase.from("consultas").insert([{
-      cliente_nome: form.cliente_nome,
-      procedimento: procFinal,
-      profissional: form.profissional,
-      data: dataISO,
-      hora: form.hora,
-      duracao: form.duracao,
-      status: statusFinal,
-      observacoes: form.observacoes,
+      user_id: user?.id,
+      cliente_nome: buscaRapida.trim(),
+      procedimento: "",
+      profissional: "Dr. Leandro Pássaro",
+      data: slotRapido.data,
+      hora: slotRapido.hora,
+      duracao: 1,
+      status: "Agendado",
+      observacoes: convenioRapido === "convenio" ? "Convênio" : "",
     }]);
-
     if (!error) {
-      setForm({ cliente_nome: "", procedimento: "", procedimento_outro: "", profissional: "Dr. Leandro Pássaro", data: "", hora: "08:00", duracao: 1, status: "Confirmado", status_outro: "", observacoes: "" });
-      setDataInput("");
-      setBuscaCliente("");
-      setProcedimentoCustom("");
-      setStatusCustom("");
-      setMostrarForm(false);
+      setSlotRapido(null);
+      setBuscaRapida("");
+      setConvenioRapido("particular");
       carregarDados();
     }
-    setSalvando(false);
+    setSalvandoRapido(false);
   }
 
   async function alterarStatus(id: number, novoStatus: string) {
@@ -185,6 +145,8 @@ export default function Agenda() {
     carregarDados();
   }
 
+  // ── Derivados ──
+
   const diasSemana = Array.from({ length: 6 }, (_, i) => {
     const d = new Date(semanaAtual);
     d.setDate(semanaAtual.getDate() + i);
@@ -196,139 +158,353 @@ export default function Agenda() {
     return consultas.find(c => c.data === iso && c.hora === hora);
   }
 
-  const sugestoesClientes = buscaCliente.length >= 1
-    ? clientes.filter(c => c.nome.toLowerCase().includes(buscaCliente.toLowerCase())).slice(0, 8)
+  const sugestoesRapidas = buscaRapida.length >= 1
+    ? clientes.filter(c => c.nome.toLowerCase().includes(buscaRapida.toLowerCase())).slice(0, 5)
     : [];
 
-  const mesAno = semanaAtual.toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
+  const clientesCadastrados = new Set(clientes.map(c => c.nome.toLowerCase().trim()));
+  function isCadastroIncompleto(nome: string) {
+    return !clientesCadastrados.has(nome.toLowerCase().trim());
+  }
 
-  const inputClass = "w-full h-10 bg-[#181C24] border border-white/10 rounded-lg px-3 text-white text-sm placeholder-white/20 outline-none focus:border-[#4F8EF7] transition-colors";
-  const labelClass = "text-white/40 text-xs font-semibold uppercase tracking-wide block mb-1";
+  function abrirSlotRapido(data: Date, hora: string) {
+    setSlotRapido({ data: toISO(data), hora });
+    setBuscaRapida("");
+    setConvenioRapido("particular");
+    setMostrarSugestoesRapidas(false);
+  }
+
+  function irParaDia(dia: Date) {
+    setDiaSelecionado(dia);
+    setModoVisualizacao("dia");
+  }
+
+  function voltarParaSemana() {
+    setSemanaAtual(getSegundaFeira(diaSelecionado));
+    setModoVisualizacao("semana");
+  }
+
+  function proximaVaga() {
+    const hojeISO = toISO(new Date());
+    let semana = getSegundaFeira(new Date());
+    for (let w = 0; w < 12; w++) {
+      const dias = Array.from({ length: 6 }, (_, i) => {
+        const d = new Date(semana);
+        d.setDate(semana.getDate() + i);
+        return d;
+      });
+      for (const dia of dias) {
+        const iso = toISO(dia);
+        if (iso < hojeISO) continue;
+        const horasOcupadas = new Set(consultas.filter(c => c.data === iso).map(c => c.hora));
+        if (HORAS.some(h => !horasOcupadas.has(h))) {
+          setSemanaAtual(semana);
+          setModoVisualizacao("semana");
+          return;
+        }
+      }
+      const next = new Date(semana);
+      next.setDate(next.getDate() + 7);
+      semana = next;
+    }
+  }
+
+  const mesAno = modoVisualizacao === "dia"
+    ? diaSelecionado.toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "long", year: "numeric" })
+    : semanaAtual.toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
 
   return (
     <div>
+      {/* ── Header ── */}
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-white text-xl font-semibold">Agenda</h1>
           <p className="text-white/40 text-sm mt-1 capitalize">{mesAno}</p>
         </div>
         <div className="flex gap-3 items-center">
-          <div className="flex items-center gap-1">
-            <button onClick={() => { const d = new Date(semanaAtual); d.setDate(d.getDate()-7); setSemanaAtual(d); }} className="w-8 h-8 bg-white/5 border border-white/10 rounded-lg text-white/50 hover:text-white flex items-center justify-center">‹</button>
-            <button onClick={() => setSemanaAtual(getSegundaFeira(new Date()))} className="px-3 h-8 bg-white/5 border border-white/10 rounded-lg text-white/50 hover:text-white text-xs">Hoje</button>
-            <button onClick={() => { const d = new Date(semanaAtual); d.setDate(d.getDate()+7); setSemanaAtual(d); }} className="w-8 h-8 bg-white/5 border border-white/10 rounded-lg text-white/50 hover:text-white flex items-center justify-center">›</button>
+          {/* Toggle Semana / Dia */}
+          <div className="flex border border-white/10 rounded-lg overflow-hidden">
+            <button
+              onClick={voltarParaSemana}
+              className={`px-3 h-8 text-xs transition-colors ${modoVisualizacao === "semana" ? "bg-white/10 text-white font-medium" : "text-white/40 hover:text-white/70"}`}
+            >
+              Semana
+            </button>
+            <button
+              onClick={() => setModoVisualizacao("dia")}
+              className={`px-3 h-8 text-xs transition-colors border-l border-white/10 ${modoVisualizacao === "dia" ? "bg-white/10 text-white font-medium" : "text-white/40 hover:text-white/70"}`}
+            >
+              Dia
+            </button>
           </div>
-          <button onClick={() => setMostrarForm(!mostrarForm)} className="flex items-center gap-2 bg-gradient-to-r from-[#4F8EF7] to-[#7C5CFC] text-white text-sm font-semibold px-4 h-9 rounded-lg hover:opacity-90">
-            + Agendar
+
+          {/* Navegação */}
+          <div className="flex items-center gap-1">
+            {modoVisualizacao === "semana" ? (
+              <>
+                <button onClick={() => { const d = new Date(semanaAtual); d.setDate(d.getDate()-7); setSemanaAtual(d); }} className="w-8 h-8 bg-white/5 border border-white/10 rounded-lg text-white/50 hover:text-white flex items-center justify-center">‹</button>
+                <button onClick={() => setSemanaAtual(getSegundaFeira(new Date()))} className="px-3 h-8 bg-white/5 border border-white/10 rounded-lg text-white/50 hover:text-white text-xs">Hoje</button>
+                <button onClick={() => { const d = new Date(semanaAtual); d.setDate(d.getDate()+7); setSemanaAtual(d); }} className="w-8 h-8 bg-white/5 border border-white/10 rounded-lg text-white/50 hover:text-white flex items-center justify-center">›</button>
+              </>
+            ) : (
+              <>
+                <button onClick={() => { const d = new Date(diaSelecionado); d.setDate(d.getDate()-1); setDiaSelecionado(d); }} className="w-8 h-8 bg-white/5 border border-white/10 rounded-lg text-white/50 hover:text-white flex items-center justify-center">‹</button>
+                <button onClick={() => setDiaSelecionado(new Date())} className="px-3 h-8 bg-white/5 border border-white/10 rounded-lg text-white/50 hover:text-white text-xs">Hoje</button>
+                <button onClick={() => { const d = new Date(diaSelecionado); d.setDate(d.getDate()+1); setDiaSelecionado(d); }} className="w-8 h-8 bg-white/5 border border-white/10 rounded-lg text-white/50 hover:text-white flex items-center justify-center">›</button>
+              </>
+            )}
+          </div>
+
+          <button
+            onClick={proximaVaga}
+            className="flex items-center gap-2 bg-gradient-to-r from-[#4F8EF7] to-[#7C5CFC] text-white text-sm font-semibold px-4 h-9 rounded-lg hover:opacity-90 transition-opacity"
+          >
+            Próxima vaga
+          </button>
+          <button
+            onClick={() => router.push("/dashboard/pacientes?novo=true")}
+            className="flex items-center gap-2 bg-gradient-to-r from-[#4F8EF7] to-[#7C5CFC] text-white text-sm font-semibold px-4 h-9 rounded-lg hover:opacity-90 transition-opacity"
+          >
+            + Cadastro
           </button>
         </div>
       </div>
 
-      {mostrarForm && (
-        <div className="bg-[#1E2330] border border-white/10 rounded-xl p-5 mb-6">
-          <div className="text-white font-semibold text-sm mb-4">Nova consulta</div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-            <div ref={buscaRef} className="relative">
-              <label className={labelClass}>Paciente *</label>
-              <input type="text" value={buscaCliente} onChange={e => { setBuscaCliente(e.target.value); setForm({...form, cliente_nome: e.target.value}); setMostrarSugestoes(true); }} onFocus={() => setMostrarSugestoes(true)} placeholder="Digite o nome..." className={inputClass} />
-              {mostrarSugestoes && sugestoesClientes.length > 0 && (
-                <div className="absolute top-full left-0 right-0 z-50 mt-1 bg-[#1C2130] border border-white/10 rounded-lg overflow-hidden shadow-xl">
-                  {sugestoesClientes.map(c => (
-                    <div key={c.id} onClick={() => { setBuscaCliente(c.nome); setForm({...form, cliente_nome: c.nome}); setMostrarSugestoes(false); }} className="px-3 py-2.5 text-sm text-white hover:bg-white/10 cursor-pointer border-b border-white/5 last:border-0">{c.nome}</div>
-                  ))}
+      {/* ── Grade: Modo Semana ── */}
+      {modoVisualizacao === "semana" && (
+        <div className="bg-[#1E2330] border border-white/5 rounded-xl overflow-hidden">
+          <div className="grid border-b border-white/5" style={{ gridTemplateColumns: "70px repeat(6, 1fr)" }}>
+            <div className="p-3 border-r border-white/5" />
+            {diasSemana.map((dia, i) => {
+              const hoje = toISO(new Date()) === toISO(dia);
+              return (
+                <div
+                  key={i}
+                  onClick={() => irParaDia(dia)}
+                  className={`p-3 text-center border-r border-white/5 last:border-r-0 cursor-pointer hover:bg-white/5 transition-colors ${hoje ? "bg-[#4F8EF7]/5" : ""}`}
+                >
+                  <div className="text-white/40 text-xs font-semibold uppercase tracking-wide">{DIAS[i]}</div>
+                  <div className={`text-lg font-bold mt-0.5 ${hoje ? "text-[#4F8EF7]" : "text-white"}`}>{formatarDataBR(dia)}</div>
                 </div>
-              )}
-            </div>
-            <div>
-              <label className={labelClass}>Procedimento</label>
-              <select value={form.procedimento} onChange={e => setForm({...form, procedimento: e.target.value})} className={inputClass}>
-                <option value="">Selecione...</option>
-                {procedimentos.map(p => <option key={p}>{p}</option>)}
-              </select>
-              {form.procedimento === "Outro" && <input type="text" value={procedimentoCustom} onChange={e => setProcedimentoCustom(e.target.value)} placeholder="Digite o procedimento..." className={`${inputClass} mt-2`} />}
-            </div>
-            <div>
-              <label className={labelClass}>Profissional</label>
-              <select value={form.profissional} onChange={e => setForm({...form, profissional: e.target.value})} className={inputClass}>
-                <option>Dr. Leandro Pássaro</option>
-                <option>Dra. Ana Lima</option>
-                <option>Dr. Carlos Santos</option>
-              </select>
-            </div>
-            <div>
-              <label className={labelClass}>Data * (DD/MM/AAAA)</label>
-              <input type="text" value={dataInput} onChange={e => setDataInput(formatarDataInput(e.target.value))} placeholder="24/05/2026" maxLength={10} className={inputClass} />
-            </div>
-            <div>
-              <label className={labelClass}>Horário *</label>
-              <select value={form.hora} onChange={e => setForm({...form, hora: e.target.value})} className={inputClass}>
-                {HORAS.map(h => <option key={h}>{h}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className={labelClass}>Status</label>
-              <select value={form.status} onChange={e => setForm({...form, status: e.target.value})} className={inputClass}>
-                {statusLista.map(s => <option key={s}>{s}</option>)}
-                <option value="Outro">Outro...</option>
-              </select>
-              {form.status === "Outro" && <input type="text" value={statusCustom} onChange={e => setStatusCustom(e.target.value)} placeholder="Digite o status..." className={`${inputClass} mt-2`} />}
-            </div>
+              );
+            })}
           </div>
-          <div className="mb-4">
-            <label className={labelClass}>Observações</label>
-            <input type="text" value={form.observacoes} onChange={e => setForm({...form, observacoes: e.target.value})} placeholder="Observações opcionais..." className={inputClass} />
-          </div>
-          <div className="flex gap-3">
-            <button onClick={salvarConsulta} disabled={salvando || !form.cliente_nome || !dataInput} className="bg-gradient-to-r from-[#4F8EF7] to-[#7C5CFC] text-white text-sm font-semibold px-5 h-9 rounded-lg hover:opacity-90 disabled:opacity-40">
-              {salvando ? "Salvando..." : "Salvar consulta"}
-            </button>
-            <button onClick={() => { setMostrarForm(false); setBuscaCliente(""); setDataInput(""); }} className="bg-white/5 border border-white/10 text-white/60 text-sm px-5 h-9 rounded-lg hover:text-white">Cancelar</button>
+          <div className="overflow-y-auto max-h-[520px]">
+            {loading ? (
+              <div className="p-8 text-center text-white/40 text-sm">Carregando agenda...</div>
+            ) : (
+              HORAS.map(hora => (
+                <div key={hora} className="grid border-b border-white/5 last:border-b-0" style={{ gridTemplateColumns: "70px repeat(6, 1fr)", minHeight: "64px" }}>
+                  <div className="p-3 border-r border-white/5 text-white/30 text-xs font-medium flex items-start pt-3">{hora}</div>
+                  {diasSemana.map((dia, diaIdx) => {
+                    const consulta = getConsulta(dia, hora);
+                    const cor = consulta ? (STATUS_CORES[consulta.status] ?? "#4F8EF7") : null;
+                    const hoje = toISO(new Date()) === toISO(dia);
+                    const incompleto = consulta && isCadastroIncompleto(consulta.cliente_nome);
+                    return (
+                      <div
+                        key={diaIdx}
+                        className={`border-r border-white/5 last:border-r-0 p-1 transition-colors ${hoje ? "bg-[#4F8EF7]/3" : ""} ${!consulta ? "cursor-pointer hover:bg-white/3 group" : ""}`}
+                        onClick={() => !consulta && abrirSlotRapido(dia, hora)}
+                      >
+                        {consulta && cor ? (
+                          <div
+                            onClick={e => { e.stopPropagation(); setConsultaSelecionada(consulta); setMostrarModal(true); }}
+                            className="rounded-lg p-2 cursor-pointer hover:brightness-110 transition-all h-full"
+                            style={{ background: `${cor}18`, borderLeft: `3px solid ${cor}` }}
+                          >
+                            <div className="flex items-center gap-1">
+                              <div className="text-white text-xs font-semibold truncate">{consulta.cliente_nome}</div>
+                              {incompleto && (
+                                <div className="w-1.5 h-1.5 rounded-full bg-amber-400 flex-shrink-0" title="Cadastro incompleto" />
+                              )}
+                            </div>
+                            <div className="text-white/50 text-xs truncate">{consulta.procedimento}</div>
+                            <span className="text-xs font-semibold px-1.5 py-0.5 rounded-full mt-1 inline-block" style={{ background: `${cor}30`, color: cor }}>{consulta.status}</span>
+                          </div>
+                        ) : (
+                          <div className="h-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                            <span className="text-white/25 text-xl leading-none">+</span>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              ))
+            )}
           </div>
         </div>
       )}
 
-      <div className="bg-[#1E2330] border border-white/5 rounded-xl overflow-hidden">
-        <div className="grid border-b border-white/5" style={{ gridTemplateColumns: "70px repeat(6, 1fr)" }}>
-          <div className="p-3 border-r border-white/5" />
-          {diasSemana.map((dia, i) => {
-            const hoje = toISO(new Date()) === toISO(dia);
-            return (
-              <div key={i} className={`p-3 text-center border-r border-white/5 last:border-r-0 ${hoje ? "bg-[#4F8EF7]/5" : ""}`}>
-                <div className="text-white/40 text-xs font-semibold uppercase tracking-wide">{DIAS[i]}</div>
-                <div className={`text-lg font-bold mt-0.5 ${hoje ? "text-[#4F8EF7]" : "text-white"}`}>{formatarDataBR(dia)}</div>
+      {/* ── Grade: Modo Dia ── */}
+      {modoVisualizacao === "dia" && (
+        <div className="bg-[#1E2330] border border-white/5 rounded-xl overflow-hidden">
+          <div className="flex items-center justify-between p-4 border-b border-white/5">
+            <div>
+              <div className="text-white/40 text-xs font-semibold uppercase tracking-wide">
+                {diaSelecionado.toLocaleDateString("pt-BR", { weekday: "long" })}
               </div>
-            );
-          })}
-        </div>
-        <div className="overflow-y-auto max-h-[520px]">
-          {loading ? (
-            <div className="p-8 text-center text-white/40 text-sm">Carregando agenda...</div>
-          ) : (
-            HORAS.map(hora => (
-              <div key={hora} className="grid border-b border-white/5 last:border-b-0" style={{ gridTemplateColumns: "70px repeat(6, 1fr)", minHeight: "64px" }}>
-                <div className="p-3 border-r border-white/5 text-white/30 text-xs font-medium flex items-start pt-3">{hora}</div>
-                {diasSemana.map((dia, diaIdx) => {
-                  const consulta = getConsulta(dia, hora);
-                  const cor = consulta ? (STATUS_CORES[consulta.status] ?? "#4F8EF7") : null;
-                  const hoje = toISO(new Date()) === toISO(dia);
-                  return (
-                    <div key={diaIdx} className={`border-r border-white/5 last:border-r-0 p-1 ${hoje ? "bg-[#4F8EF7]/3" : ""}`}>
-                      {consulta && cor && (
-                        <div onClick={() => { setConsultaSelecionada(consulta); setMostrarModal(true); }} className="rounded-lg p-2 cursor-pointer hover:brightness-110 transition-all h-full" style={{ background: `${cor}18`, borderLeft: `3px solid ${cor}` }}>
-                          <div className="text-white text-xs font-semibold truncate">{consulta.cliente_nome}</div>
-                          <div className="text-white/50 text-xs truncate">{consulta.procedimento}</div>
-                          <span className="text-xs font-semibold px-1.5 py-0.5 rounded-full mt-1 inline-block" style={{ background: `${cor}30`, color: cor }}>{consulta.status}</span>
+              <div className="flex items-center gap-3 mt-0.5">
+                <span className={`text-lg font-bold ${toISO(diaSelecionado) === toISO(new Date()) ? "text-[#4F8EF7]" : "text-white"}`}>
+                  {formatarDataBR(diaSelecionado)}
+                </span>
+                <span className="text-white/30 text-sm capitalize">
+                  {diaSelecionado.toLocaleDateString("pt-BR", { month: "long", year: "numeric" })}
+                </span>
+                {toISO(diaSelecionado) === toISO(new Date()) && (
+                  <span className="text-xs px-2 py-0.5 rounded-full bg-[#4F8EF7]/15 text-[#4F8EF7] border border-[#4F8EF7]/20">
+                    Hoje
+                  </span>
+                )}
+              </div>
+            </div>
+            <button
+              onClick={voltarParaSemana}
+              className="text-white/40 text-xs hover:text-white transition-colors flex items-center gap-1"
+            >
+              ← Semana
+            </button>
+          </div>
+
+          <div className="overflow-y-auto max-h-[540px]">
+            {loading ? (
+              <div className="p-8 text-center text-white/40 text-sm">Carregando agenda...</div>
+            ) : (
+              HORAS.map(hora => {
+                const consulta = getConsulta(diaSelecionado, hora);
+                const cor = consulta ? (STATUS_CORES[consulta.status] ?? "#4F8EF7") : null;
+                const incompleto = consulta && isCadastroIncompleto(consulta.cliente_nome);
+                return (
+                  <div
+                    key={hora}
+                    className="flex border-b border-white/5 last:border-b-0"
+                    style={{ minHeight: 80 }}
+                  >
+                    <div className="w-16 flex-shrink-0 border-r border-white/5 text-white/30 text-xs font-medium flex items-start pt-4 px-3">
+                      {hora}
+                    </div>
+                    <div className="flex-1 p-2">
+                      {consulta && cor ? (
+                        <div
+                          onClick={() => { setConsultaSelecionada(consulta); setMostrarModal(true); }}
+                          className="rounded-lg p-3 cursor-pointer hover:brightness-110 transition-all h-full"
+                          style={{ background: `${cor}18`, borderLeft: `3px solid ${cor}` }}
+                        >
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-white font-semibold text-sm">{consulta.cliente_nome}</span>
+                            {incompleto && (
+                              <div className="w-2 h-2 rounded-full bg-amber-400 flex-shrink-0" title="Cadastro incompleto — completar quando o paciente chegar" />
+                            )}
+                            <span className="text-xs font-semibold px-2 py-0.5 rounded-full ml-auto" style={{ background: `${cor}30`, color: cor }}>
+                              {consulta.status}
+                            </span>
+                          </div>
+                          <div className="text-white/50 text-xs">
+                            {consulta.procedimento || <span className="italic text-white/25">Procedimento não informado</span>}
+                          </div>
+                          {consulta.observacoes && (
+                            <div className="text-white/30 text-xs mt-1">{consulta.observacoes}</div>
+                          )}
                         </div>
+                      ) : (
+                        <button
+                          onClick={() => abrirSlotRapido(diaSelecionado, hora)}
+                          className="w-full h-full flex items-center justify-center text-white/15 hover:text-white/35 hover:bg-white/3 rounded-lg transition-all"
+                        >
+                          <span className="text-2xl leading-none">+</span>
+                        </button>
                       )}
                     </div>
-                  );
-                })}
-              </div>
-            ))
-          )}
+                  </div>
+                );
+              })
+            )}
+          </div>
         </div>
-      </div>
+      )}
 
+      {/* ── Modal: Agendamento rápido ── */}
+      {slotRapido && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4" onClick={() => setSlotRapido(null)}>
+          <div className="bg-[#1E2330] border border-white/10 rounded-2xl p-6 w-full max-w-xs" onClick={e => e.stopPropagation()}>
+            <div className="flex items-start justify-between mb-5">
+              <div>
+                <div className="text-white font-semibold text-sm">Novo agendamento</div>
+                <div className="text-white/40 text-xs mt-1">
+                  {new Date(slotRapido.data + "T12:00:00").toLocaleDateString("pt-BR", {
+                    weekday: "short", day: "2-digit", month: "short",
+                  })}
+                  {" · "}{slotRapido.hora}
+                </div>
+              </div>
+              <button onClick={() => setSlotRapido(null)} className="text-white/30 hover:text-white text-lg mt-0.5">✕</button>
+            </div>
+
+            <div ref={buscaRapidaRef} className="relative mb-3">
+              <label className="text-white/40 text-xs font-semibold uppercase tracking-wide block mb-1">Paciente</label>
+              <input
+                type="text"
+                value={buscaRapida}
+                onChange={e => { setBuscaRapida(e.target.value); setMostrarSugestoesRapidas(true); }}
+                onFocus={() => setMostrarSugestoesRapidas(true)}
+                placeholder="Nome do paciente..."
+                autoFocus
+                className="w-full h-10 bg-[#13161C] border border-white/10 rounded-lg px-3 text-white text-sm placeholder-white/20 outline-none focus:border-[#4F8EF7] transition-colors"
+              />
+              {mostrarSugestoesRapidas && sugestoesRapidas.length > 0 && (
+                <div className="absolute top-full left-0 right-0 z-50 mt-1 bg-[#1C2130] border border-white/10 rounded-lg overflow-hidden shadow-xl">
+                  {sugestoesRapidas.map(c => (
+                    <div
+                      key={c.id}
+                      onClick={() => { setBuscaRapida(c.nome); setMostrarSugestoesRapidas(false); }}
+                      className="px-3 py-2.5 text-sm text-white hover:bg-white/10 cursor-pointer border-b border-white/5 last:border-0"
+                    >
+                      {c.nome}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="mb-5">
+              <label className="text-white/40 text-xs font-semibold uppercase tracking-wide block mb-1">Tipo</label>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setConvenioRapido("particular")}
+                  className={`flex-1 h-9 text-sm rounded-lg border transition-all ${
+                    convenioRapido === "particular"
+                      ? "bg-[#4F8EF7]/20 border-[#4F8EF7]/50 text-[#93BBFB] font-medium"
+                      : "bg-white/5 border-white/10 text-white/40 hover:text-white/70"
+                  }`}
+                >
+                  Particular
+                </button>
+                <button
+                  onClick={() => setConvenioRapido("convenio")}
+                  className={`flex-1 h-9 text-sm rounded-lg border transition-all ${
+                    convenioRapido === "convenio"
+                      ? "bg-[#4F8EF7]/20 border-[#4F8EF7]/50 text-[#93BBFB] font-medium"
+                      : "bg-white/5 border-white/10 text-white/40 hover:text-white/70"
+                  }`}
+                >
+                  Convênio
+                </button>
+              </div>
+            </div>
+
+            <button
+              onClick={salvarRapido}
+              disabled={salvandoRapido || !buscaRapida.trim()}
+              className="w-full bg-gradient-to-r from-[#4F8EF7] to-[#7C5CFC] text-white text-sm font-semibold h-9 rounded-lg hover:opacity-90 disabled:opacity-40 transition-opacity"
+            >
+              {salvandoRapido ? "Agendando…" : "Agendar"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Modal: Detalhes da consulta ── */}
       {mostrarModal && consultaSelecionada && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4" onClick={() => setMostrarModal(false)}>
           <div className="bg-[#1E2330] border border-white/10 rounded-2xl p-6 w-full max-w-sm" onClick={e => e.stopPropagation()}>
@@ -338,7 +514,7 @@ export default function Agenda() {
             </div>
             <div className="space-y-3 mb-5">
               <div className="flex justify-between text-sm"><span className="text-white/40">Paciente</span><span className="text-white font-medium">{consultaSelecionada.cliente_nome}</span></div>
-              <div className="flex justify-between text-sm"><span className="text-white/40">Procedimento</span><span className="text-white">{consultaSelecionada.procedimento}</span></div>
+              <div className="flex justify-between text-sm"><span className="text-white/40">Tipo</span><span className="text-white">{tipoAtendimento ?? "—"}</span></div>
               <div className="flex justify-between text-sm"><span className="text-white/40">Data</span><span className="text-white">{new Date(consultaSelecionada.data + "T12:00:00").toLocaleDateString("pt-BR")}</span></div>
               <div className="flex justify-between text-sm"><span className="text-white/40">Horário</span><span className="text-white">{consultaSelecionada.hora}</span></div>
               <div className="flex justify-between text-sm"><span className="text-white/40">Profissional</span><span className="text-white">{consultaSelecionada.profissional}</span></div>
@@ -356,7 +532,15 @@ export default function Agenda() {
                 ))}
               </div>
             </div>
-            <button onClick={() => excluirConsulta(consultaSelecionada.id)} className="w-full py-2 text-red-400 text-sm border border-red-400/20 rounded-lg hover:bg-red-400/10 transition-colors">Excluir consulta</button>
+            <div className="flex gap-2 mb-3">
+              <button
+                onClick={() => { setMostrarModal(false); router.push("/dashboard/pacientes?novo=true"); }}
+                className="flex-1 py-2 text-[#4F8EF7] text-sm border border-[#4F8EF7]/20 rounded-lg hover:bg-[#4F8EF7]/10 transition-colors"
+              >
+                Cadastrar paciente
+              </button>
+              <button onClick={() => excluirConsulta(consultaSelecionada.id)} className="flex-1 py-2 text-red-400 text-sm border border-red-400/20 rounded-lg hover:bg-red-400/10 transition-colors">Excluir consulta</button>
+            </div>
           </div>
         </div>
       )}
