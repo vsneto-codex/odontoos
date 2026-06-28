@@ -1,172 +1,173 @@
 # CLAUDE.md
-# Instruções permanentes — OdontoOS
 
-Este arquivo é lido automaticamente pelo Claude Code
-em toda sessão. Seguir estas instruções é obrigatório.
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+---
+
+# Instruções permanentes — OdontoOS
 
 ---
 
 ## Identidade do projeto
 
-OdontoOS é a primeira capa da OS Platform.
-
-É um sistema operacional de consultório odontológico
-para dentistas autônomos e pequenas clínicas.
-
-Não é um quiz. Não é um ERP. Não é um site.
-É uma plataforma SaaS operacional.
+OdontoOS é a primeira capa da OS Platform — um sistema operacional de consultório odontológico para dentistas autônomos e pequenas clínicas. Não é um ERP. É uma plataforma SaaS operacional.
 
 ---
 
 ## Documentos obrigatórios
 
-Antes de qualquer ação em cada sessão, leia:
+Leia antes de qualquer ação em cada sessão:
 
-1. ARCHITECTURE_docs/CONTEXT.md
-   Estado atual do projeto, sprints, decisões.
-
-2. ARCHITECTURE_docs/PLATFORM_VISION.md
-   Visão da plataforma multi-capa e filosofia dos planos.
-
-3. ARCHITECTURE_docs/PRODUCT_VISION.md
-   Visão específica do OdontoOS, MVP e faseação.
-
-4. ARCHITECTURE_docs/DECISIONS.md
-   Decisões arquiteturais já tomadas.
-
-5. ARCHITECTURE_docs/SESSION_RULES.md
-   Regras de comportamento em cada sessão.
-
-Nunca agir sem ter lido estes documentos primeiro.
+1. `ARCHITECTURE_docs/CONTEXT.md` — Estado atual, sprints, schema completo do banco
+2. `ARCHITECTURE_docs/PLATFORM_VISION.md` — Visão multi-capa e filosofia dos planos
+3. `ARCHITECTURE_docs/PRODUCT_VISION.md` — MVP, faseação e princípios de UX
+4. `ARCHITECTURE_docs/DECISIONS.md` — Decisões arquiteturais já tomadas
+5. `ARCHITECTURE_docs/SESSION_RULES.md` — Regras de comportamento por sessão
 
 ---
 
-## Nomenclatura obrigatória — MOTOR vs CAPA
+## Comandos
 
-### Definições fixas
+```bash
+npm run dev      # servidor local em http://localhost:3000
+npm run build    # build de produção
+npm run lint     # ESLint (sem --fix automático)
+```
 
-Usuário — quem assina o plano e opera o sistema.
-O dentista, a recepcionista, o gestor da clínica.
-
-Cliente — quem o usuário atende.
-No motor: sempre "cliente". Na interface: depende da capa.
-
-### Motor (banco de dados, código, variáveis, funções, tipos)
-
-Usa sempre "cliente" — nunca terminologia específica de profissão.
-
-Obrigatório em:
-- Nomes de tabelas no Supabase
-- Variáveis, funções e tipos TypeScript
-- Server Actions e Route Handlers
-- Comentários de código
-
-### Interface por capa (labels, textos, títulos visíveis ao usuário)
-
-| Capa | Termo na interface |
-|------|--------------------|
-| OdontoOS | Paciente |
-| MecânicaOS | Cliente |
-| ImóveisOS | Comprador ou Lead |
-| FisioOS | Paciente |
-| PersonalOS | Aluno |
-| MassagemOS | Cliente |
-
-### Regra bidirecional — inviolável
-
-O usuário nunca vê "cliente" na interface do OdontoOS.
-O código nunca usa "paciente" fora da camada de interface.
+Não há testes automatizados no projeto atualmente.
 
 ---
 
-## Stack do projeto
+## Stack
 
-- Next.js 16 com App Router
-- React 19
-- TypeScript — obrigatório em todos os arquivos
-- Tailwind CSS v4
-- Supabase (PostgreSQL + Auth + RLS)
-- Vercel (deploy automático via GitHub)
+| Camada | Tecnologia |
+|--------|-----------|
+| Framework | Next.js 16 (App Router) |
+| Runtime | React 19 |
+| Linguagem | TypeScript obrigatório — nunca `any` |
+| Estilização | Tailwind CSS v4 puro — sem biblioteca de componentes |
+| Backend / DB | Supabase (PostgreSQL + Auth + RLS) |
+| Cliente Supabase | `@supabase/ssr` |
+| Deploy | Vercel (automático via GitHub) |
+
+Variáveis de ambiente necessárias:
+```
+NEXT_PUBLIC_SUPABASE_URL
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY   # novo nome do ANON_KEY no Supabase atual
+```
+
+---
+
+## Arquitetura
+
+### Proteção de rotas — `proxy.ts`
+
+Next.js 16 renomeou `middleware.ts` para `proxy.ts` e a função exportada de `middleware` para `proxy`. Toda rota `/dashboard/*` é protegida aqui. Nunca criar rota protegida sem passar por este arquivo.
+
+### Acesso ao Supabase
+
+Dois clientes distintos — nunca misturar:
+
+- `utils/supabase/client.ts` → `createBrowserClient` — use em Client Components (`"use client"`)
+- `utils/supabase/server.ts` → `createServerClient` — use em Server Components, Server Actions e Route Handlers
+
+### Autenticação
+
+- Login: `app/page.tsx` (`"use client"` + `useActionState`) chama `app/actions/auth.ts` (Server Action)
+- Logout: `<form action={signOut}>` no `app/dashboard/layout.tsx`
+- Callback OAuth: `app/auth/callback/route.ts`
+
+### Estrutura dos módulos do dashboard
+
+Cada módulo vive em `app/dashboard/<modulo>/page.tsx`. Não criar arquivos de componente separados a menos que o arquivo ultrapasse ~400 linhas ou o componente seja reutilizado em 2+ módulos. O layout compartilhado (sidebar, header, tab bar mobile) está em `app/dashboard/layout.tsx` (`"use client"`).
+
+### Queries ao Supabase
+
+- Dashboard: `Promise.all` com 4 queries em paralelo no render (Server Component `async`) — sem cache
+- Módulos: queries diretas no Server Component ou via Server Action para mutações
+- Nunca fazer fetch sem tratar erro visivelmente ao usuário
+
+---
+
+## Nomenclatura motor/capa — inviolável
+
+**Motor** (banco, código, variáveis, tipos, Server Actions): usa sempre `cliente`
+**Interface OdontoOS** (labels, textos visíveis): usa sempre `Paciente`
+
+| Camada | Termo correto |
+|--------|--------------|
+| Tabelas Supabase | `clientes`, `cliente_id`, `cliente_nome` |
+| TypeScript | `cliente`, `ClienteType`, `clienteId` |
+| UI do OdontoOS | "Paciente", "Novo paciente", "Buscar paciente" |
+
+O usuário nunca vê "cliente" na interface. O código nunca usa "paciente" fora da camada de interface.
+
+---
+
+## Design system
+
+Sem bibliotecas de UI externas. Tailwind direto, sem `@apply` desnecessário.
+
+| Token | Valor |
+|-------|-------|
+| Background base | `#0A0C0F` |
+| Superfície de cards | `#161A22` |
+| Sidebar/Header | `#181C24` |
+| Acento primário | `#4F8EF7` (azul) → `#7C5CFC` (roxo) como gradiente |
+| Verde sucesso | `#22C55E` |
+| Âmbar aviso | `#F59E0B` |
+| Vermelho erro | `#EF4444` |
+| Rosa urgência | `#EC4899` |
+
+---
+
+## Filosofia dos planos
+
+**Standard** = funcionalidade essencial do dia a dia. Nunca castrar.
+**Premium** = superpoderes (IA, automação avançada). Nunca colocar o essencial aqui.
+
+Validação: "O usuário precisa disso todo dia?" + "Isso evita que ele perca dinheiro?" → se sim para as duas, é standard.
 
 ---
 
 ## Regras de desenvolvimento
 
-1. Ler os documentos antes de qualquer ação
-2. Nunca alterar mais de uma responsabilidade por sessão
-3. Nunca criar arquivo sem justificativa clara
-4. Nunca criar componente duplicado
-5. Nunca misturar lógica com visual
-6. Sempre usar TypeScript — nunca any
-7. Sempre tratar erros visivelmente ao usuário
-8. Sempre perguntar: isso é do motor ou da capa?
-9. RLS obrigatório em todas as tabelas do Supabase
-10. Atualizar CONTEXT.md ao concluir cada feature
-11. Registrar decisões em DECISIONS.md
-
----
-
-## Filosofia dos planos — nunca violar
-
-Standard é premium real.
-Completo, desejável e funcional por si só.
-Nunca castrar funcionalidade essencial do dia a dia.
-
-Premium são superpoderes.
-Multiplica o negócio com IA e automação avançada.
-Nunca colocar o essencial apenas no premium.
-
-Pergunta de validação para cada funcionalidade:
-"O usuário precisa disso todo dia?"
-"Isso evita que ele perca dinheiro?"
-Se sim para as duas — é standard.
-Se vai além do dia a dia — é premium.
-
----
-
-## O que nunca fazer
-
-- Nunca acessar dados de um tenant a partir de outro
-- Nunca criar rota sem proteger com proxy.ts
-- Nunca fazer fetch do Supabase sem tratar erro
+- Nunca alterar mais de uma responsabilidade por sessão
+- Nunca criar arquivo sem justificativa clara; nunca duplicar componente
+- Nunca misturar lógica com visual
+- RLS obrigatório em todas as tabelas do Supabase
 - Nunca hardcodar dados que deveriam vir do banco
-- Nunca criar tela sem seguir PRODUCT_VISION.md
-- Nunca criar funcionalidade fora do MVP atual
-- Nunca usar "paciente" no motor central
-- Nunca usar "usuário" para se referir ao cliente
-  do usuário — usar sempre "cliente"
-- Nunca fazer refatoração ampla sem aprovação
-- Nunca avançar sem confirmação quando propuser
-  algo que afete arquitetura ou dados
+- Nunca criar funcionalidade fora do MVP atual (ver `ARCHITECTURE_docs/PRODUCT_VISION.md`)
+- Nunca acessar dados de um tenant a partir de outro
+- Commits em português, estilo imperativo ("adiciona", "corrige", "implementa")
 
 ---
 
 ## Comportamento em cada sessão
 
-Início:
+**Início:**
 1. Ler os 5 documentos obrigatórios
-2. Confirmar o estado atual do projeto
-3. Declarar o objetivo da sessão
-4. Declarar quais arquivos serão tocados
-5. Aguardar confirmação antes de agir
+2. Confirmar estado atual do projeto
+3. Declarar objetivo da sessão e arquivos que serão tocados
+4. Aguardar confirmação antes de agir
 
-Durante:
-- Alterar um arquivo por vez
-- Explicar cada alteração antes de gerar código
+**Durante:**
+- Alterar um arquivo por vez; explicar cada alteração antes de gerar código
 - Avisar se o escopo estiver crescendo
-- Nunca gerar código sem aprovação da direção
+- Para mudanças de schema ou arquitetura: apresentar plano e aguardar `ok` explícito
 
-Fim:
-- Atualizar CONTEXT.md com o que foi feito
-- Registrar decisões em DECISIONS.md
-- Declarar próximo passo recomendado
+**Fim:**
+- Atualizar `ARCHITECTURE_docs/CONTEXT.md` com o que foi feito
+- Registrar decisões não óbvias em `ARCHITECTURE_docs/DECISIONS.md`
 
 ---
 
 ## Formato de entrega de cada alteração
 
+```
 O QUE alterou:
 ONDE alterou:
 POR QUE alterou:
 IMPACTO:
 PRÓXIMO PASSO:
+```
